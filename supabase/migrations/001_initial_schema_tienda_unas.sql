@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 CREATE TABLE IF NOT EXISTS public.user_roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
-    role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'customer'))
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'customer')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), CONSTRAINT user_roles_user_role_unique UNIQUE (user_id, role)
 );
 
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.service_categories(
 
 CREATE TABLE IF NOT EXISTS public.services (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    category_id UUID REFERENCES public.service_categories ON DELETE SET NULL,
+    category_id UUID REFERENCES public.service_categories(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     description TEXT,
     price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
 
 CREATE TABLE IF NOT EXISTS public.business_hours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    weekday SMALLINT NOT NULL CHECK (weekdat BETWEEN 0 AND 6),
+    weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
     opens_at TIME,
     closes_at TIME,
     is_closed BOOLEAN NOT NULL DEFAULT FALSE,
@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS public.business_hours (
 
 CREATE TABLE IF NOT EXISTS public.availability_exceptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    starts_at TIMESTAMPTZ NOT NULL(),
-    ends_at TIMESTAMPTZ NOT NULL(),
+    starts_at TIMESTAMPTZ NOT NULL,
+    ends_at TIMESTAMPTZ NOT NULL,
     reason TEXT,
     created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     CHECK (ends_at > starts_at)
@@ -81,9 +81,9 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE RESTRICT,
     service_id UUID REFERENCES public.services(id) ON DELETE SET NULL,
-    starts_at TIMESTAMPTZ NOT NULL(),
-    ends_at TIMESTAMPTZ NOT NULL(),
-    status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'confirmed', 'cancelled', 'completed'))
+    starts_at TIMESTAMPTZ NOT NULL,
+    ends_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'confirmed', 'cancelled', 'completed')),
     service_name_snapshot TEXT NOT NULL,
     price_snapshot NUMERIC(10,2) NOT NULL CHECK (price_snapshot >= 0),
     deposit_required NUMERIC(10,2) NOT NULL CHECK (deposit_required >= 0),
@@ -102,10 +102,10 @@ CREATE TABLE IF NOT EXISTS public.course_categories (
 CREATE TABLE IF NOT EXISTS public.courses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     category_id UUID REFERENCES public.course_categories(id) ON DELETE SET NULL,
-    name TEXT NOT NULL 
+    name TEXT NOT NULL,
     description TEXT,
     price NUMERIC(10,2) NOT NULL CHECK (price > 0),
-    modality TEXT NOT NULL
+    modality TEXT NOT NULL,
     image_path TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -114,9 +114,9 @@ CREATE TABLE IF NOT EXISTS public.courses (
 
 CREATE TABLE IF NOT EXISTS public.course_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_id UUID REFERENCES public.courses(id) ON DELETE SET NULL,
-    starts_at TIMESTAMPTZ NOT NULL(),
-    ends_at TIMESTAMPTZ NOT NULL(),
+    course_id UUID NOT NULL REFERENCES public.courses(id) ON DELETE RESTRICT,
+    starts_at TIMESTAMPTZ NOT NULL,
+    ends_at TIMESTAMPTZ NOT NULL,
     capacity INTEGER CHECK (capacity IS NULL OR capacity > 0),
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'full', 'cancelled')),
     location TEXT,
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS public.media (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF EXISTS public.gallery_items (
+CREATE TABLE IF NOT EXISTS public.gallery_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     media_id UUID NOT NULL REFERENCES public.media(id) ON DELETE RESTRICT,
     sort_order INTEGER NOT NULL DEFAULT 0,
