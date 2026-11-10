@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Paleta cromática del estudio */
+  --nail-50: #FAF9F7;
+  --nail-100: #F7F4EF;
+  --nail-200: #F1EDE4;
+  --nail-300: #EBE5D9;
+  --nail-400: #E3DAC9;
+  --nail-500: #B6AEA1;
+  --nail-600: #878378;
+  --nail-700: #5B5650;
+  --nail-800: #2D2C28;
+
+  --background: var(--nail-50);
+  --foreground: var(--nail-800);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-nail-50: var(--nail-50);
+  --color-nail-100: var(--nail-100);
+  --color-nail-200: var(--nail-200);
+  --color-nail-300: var(--nail-300);
+  --color-nail-400: var(--nail-400);
+  --color-nail-500: var(--nail-500);
+  --color-nail-600: var(--nail-600);
+  --color-nail-700: var(--nail-700);
+  --color-nail-800: var(--nail-800);
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background-color: var(--nail-400);
+  color: var(--nail-800);
+}
+
+@keyframes slideInFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-44px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-slide-left {
+  animation: slideInFromLeft 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-left-delay-1 {
+  opacity: 0;
+  animation: slideInFromLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.14s forwards;
+}
+
+.animate-slide-left-delay-2 {
+  opacity: 0;
+  animation: slideInFromLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.28s forwards;
+}
+
+.animate-fade-scale {
+  opacity: 0;
+  animation: fadeInScale 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.18s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-left,
+  .animate-slide-left-delay-1,
+  .animate-slide-left-delay-2,
+  .animate-fade-scale {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
