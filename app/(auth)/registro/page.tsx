@@ -8,7 +8,7 @@ import { registerUser } from "@/actions/auth/auth";
 
 export default function RegistroPage() {
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
+  // const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [registered, setRegistered] = useState(false);
@@ -33,13 +33,13 @@ export default function RegistroPage() {
     const formData = new FormData(e.currentTarget);
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      try {
-        await registerUser(formData);
-        return;
-      } catch {
-        // Redirección gestionada por Next.js
-      }
+      await registerUser(formData);
+      return;
     }
+
+    setValidationError(
+      "No se ha podido conectar con el servicio de registro."
+    );
 
     setRegistered(true);
   }
@@ -112,7 +112,7 @@ export default function RegistroPage() {
                 />
               </div>
 
-              <div>
+              {/* <div>
                 <label
                   htmlFor="reg-phone"
                   className="block font-medium text-[#2D2C28] mb-1.5"
@@ -129,7 +129,7 @@ export default function RegistroPage() {
                   placeholder="+34 600 00 00 00"
                   className="w-full px-4 py-3 rounded-xl bg-[#F7F4EF] border border-[#B6AEA1] text-[#2D2C28] focus:outline-none focus:border-[#2D2C28]"
                 />
-              </div>
+              </div> */}
 
               <div>
                 <label

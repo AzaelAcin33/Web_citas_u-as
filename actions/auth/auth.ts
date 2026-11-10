@@ -59,10 +59,10 @@ export async function registerUser(formData: FormData) {
 
     if (error) {
         console.error('Error de registro', error.message)
-        redirect('/auth=register-error')
+        redirect('/?auth=register-error')
     }
-
-    redirect('/auth=registered')
+    console.log('REGISTRO CORRECTO: redirigiendo a inicio')
+    redirect('/?auth=registered')
 }
 
 // Inicio de sesión
@@ -95,7 +95,7 @@ export async function loginUser(formData: FormData) {
 
     if (error) {
         console.error('Error de inicio de sesión:', error.message)
-        redirect('/auth=login-error')
+        redirect('/?auth=login-error')
     }
 
     redirect('/')
@@ -105,6 +105,13 @@ export async function loginUser(formData: FormData) {
 
 export async function logoutUser() {
     const supabase = await createClient()
-    await supabase.auth.signOut()
+
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+        console.error('Error al cerrar sesión:', error.message)
+        redirect('/?auth=logout-error')
+    }
+
     redirect('/')
 }
