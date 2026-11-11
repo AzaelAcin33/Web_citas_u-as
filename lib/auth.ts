@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { redirect } from 'next/navigation'
 
 export async function getCurrentUser() {
     const supabase = await createClient()
@@ -21,4 +22,22 @@ export async function getCurrentUser() {
         fullName: profile?.full_name ?? user.user_metadata?.full_name ?? '',
         role: roleData?.role ?? 'customer',
     }
+}
+
+export async function requireUser() {
+    const user = await getCurrentUser()
+    if (!user) {
+        redirect('/login?auth=login-required')
+    }
+    return user
+}
+
+export async function requireRole(allowedRoles: string[]) {
+    const user = await requireUser()
+
+    if (!allowedRoles.includes(user.role)) {
+        redirect('/')
+    }
+
+    return user
 }
