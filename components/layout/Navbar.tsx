@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase";
+import { logoutUser } from "@/actions/auth/auth";
+import type { User } from "@supabase/supabase-js";
 
 const NAV_LINKS = [
   { href: "/", label: "Inicio" },
@@ -17,6 +20,25 @@ const NAV_LINKS = [
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#EBE5D9] bg-[#FAF9F7]/95 backdrop-blur-md">
@@ -50,11 +72,10 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3.5 py-2 rounded-full text-sm transition-colors ${
-                  isActive
-                    ? "bg-[#E3DAC9] text-[#2D2C28] font-medium"
-                    : "text-[#5B5650] hover:text-[#2D2C28] hover:bg-[#F1EDE4]"
-                }`}
+                className={`px-3.5 py-2 rounded-full text-sm transition-colors ${isActive
+                  ? "bg-[#E3DAC9] text-[#2D2C28] font-medium"
+                  : "text-[#5B5650] hover:text-[#2D2C28] hover:bg-[#F1EDE4]"
+                  }`}
               >
                 {link.label}
               </Link>
@@ -64,18 +85,60 @@ export default function Navbar() {
 
         {/* Acciones de cuenta y reserva */}
         <div className="hidden md:flex items-center gap-2.5 shrink-0">
-          <Link
-            href="/login"
-            className="px-4 py-2.5 rounded-full text-sm font-medium text-[#5B5650] hover:text-[#2D2C28] hover:bg-[#F1EDE4] border border-[#EBE5D9] transition-colors"
-          >
-            Iniciar Sesión
-          </Link>
-          <Link
-            href="/registro"
-            className="px-4 py-2.5 rounded-full text-sm font-medium text-[#2D2C28] bg-[#E3DAC9] hover:bg-[#B6AEA1]/50 border border-[#B6AEA1]/60 transition-colors"
-          >
-            Crear Cuenta
-          </Link>
+          {loading ? null : !user ? (
+            <>
+              <Link
+                href="/login"
+                className="px-4 py-2.5 rounded-full text-sm font-medium text-[#5B5650] hover:text-[#2D2C28] hover:bg-[#F1EDE4] border border-[#EBE5D9] transition-colors"
+              >
+                Iniciar Sesión
+              </Link>
+
+              <Link
+                href="/registro"
+                className="px-4 py-2.5 rounded-full text-sm font-medium text-[#2D2C28] bg-[#E3DAC9] hover:bg-[#B6AEA1]/50 border border-[#B6AEA1]/60 transition-colors"
+              >
+                Crear Cuenta
+              </Link>
+            </>
+          ) : (
+            <div className="relative" ref={profileRef}>
+              <button
+                type="button"
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="px-4 py-2.5 rounded-full border border-[#B6AEA1] text-sm font-medium"
+              >
+                {user.user_metadata?.full_name?.split(" ")[0] || "Mi perfil"}
+              </button>
+
+              {profileOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-[#EBE5D9] bg-[#FAF9F7] shadow-lg p-2">
+                  <Link
+                    href="/mi-cuenta"
+                    className="block px-3 py-2 rounded-lg text-sm hover:bg-[#F1EDE4]"
+                  >
+                    Mi cuenta
+                  </Link>
+
+                  <Link
+                    href="/mis-reservas"
+                    className="block px-3 py-2 rounded-lg text-sm hover:bg-[#F1EDE4]"
+                  >
+                    Mis reservas
+                  </Link>
+
+                  <form action={logoutUser}>
+                    <button
+                      type="submit"
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-red-700 hover:bg-[#F1EDE4]"
+                    >
+                      Cerrar sesión
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
           <Link
             href="/reservas"
             className="px-5 py-2.5 rounded-full text-sm font-medium bg-[#2D2C28] text-[#FAF9F7] hover:bg-[#5B5650] transition-colors"
@@ -130,11 +193,10 @@ export default function Navbar() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-[#E3DAC9] text-[#2D2C28]"
-                      : "text-[#5B5650] hover:bg-[#F1EDE4] hover:text-[#2D2C28]"
-                  }`}
+                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors ${isActive
+                    ? "bg-[#E3DAC9] text-[#2D2C28]"
+                    : "text-[#5B5650] hover:bg-[#F1EDE4] hover:text-[#2D2C28]"
+                    }`}
                 >
                   {link.label}
                 </Link>
@@ -143,20 +205,48 @@ export default function Navbar() {
           </div>
 
           <div className="pt-3 border-t border-[#EBE5D9] flex flex-col sm:flex-row gap-2.5">
-            <Link
-              href="/login"
-              onClick={() => setMobileOpen(false)}
-              className="flex-1 text-center py-3 rounded-xl border border-[#B6AEA1] text-sm font-medium text-[#2D2C28] bg-[#F7F4EF]"
-            >
-              Iniciar Sesión
-            </Link>
-            <Link
-              href="/registro"
-              onClick={() => setMobileOpen(false)}
-              className="flex-1 text-center py-3 rounded-xl border border-[#B6AEA1] text-sm font-medium text-[#2D2C28] bg-[#E3DAC9]"
-            >
-              Crear Cuenta
-            </Link>
+            {!loading && (
+              <>
+                {!user ? (
+                  <>
+                    <Link
+                      href="/login"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex-1 text-center py-3 rounded-xl border border-[#B6AEA1] text-sm font-medium text-[#2D2C28] bg-[#F7F4EF]"
+                    >
+                      Iniciar Sesión
+                    </Link>
+
+                    <Link
+                      href="/registro"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex-1 text-center py-3 rounded-xl border border-[#B6AEA1] text-sm font-medium text-[#2D2C28] bg-[#E3DAC9]"
+                    >
+                      Crear Cuenta
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/mi-cuenta"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex-1 text-center py-3 rounded-xl border border-[#B6AEA1] text-sm font-medium text-[#2D2C28]"
+                    >
+                      Mi perfil
+                    </Link>
+
+                    <form action={logoutUser} className="flex-1">
+                      <button
+                        type="submit"
+                        className="w-full py-3 rounded-xl border border-[#B6AEA1] text-sm font-medium text-red-700"
+                      >
+                        Cerrar sesión
+                      </button>
+                    </form>
+                  </>
+                )}
+              </>
+            )}
             <Link
               href="/reservas"
               onClick={() => setMobileOpen(false)}

@@ -54,6 +54,7 @@ export async function registerUser(formData: FormData) {
             data: {
                 full_name: fullName,
             },
+            emailRedirectTo: 'http://localhost:3000/auth/callback',
         },
     })
 
