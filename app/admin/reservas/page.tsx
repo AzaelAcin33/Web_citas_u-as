@@ -1,18 +1,55 @@
 "use client";
 
-import { useState } from "react";
-import {
-  INITIAL_APPOINTMENTS,
-  INITIAL_CUSTOMERS,
-  INITIAL_PAYMENTS,
-} from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
 import { Appointment, AppointmentStatus, PaymentRecord } from "@/lib/types";
 
 export default function AdminReservasPage() {
-  const [appointments, setAppointments] =
-    useState<Appointment[]>(INITIAL_APPOINTMENTS);
-  const [payments, setPayments] = useState<PaymentRecord[]>(INITIAL_PAYMENTS);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [customers, setCustomers] = useState<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    email: string | null;
+  }[]>([]);
+
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadReservations() {
+      const supabase = createClient();
+
+      setLoading(true);
+      setError(null);
+
+      const [appointmentsResult, paymentsResult, customersResult] =
+        await Promise.all([
+          supabase.from("appointments").select("*").order("starts_at", { ascending: false }),
+          supabase.from("payments").select("*").order("created_at", { ascending: false }),
+          supabase.from("customers").select("id, full_name, phone, email"),
+        ]);
+
+      const queryError =
+        appointmentsResult.error ||
+        paymentsResult.error ||
+        customersResult.error;
+
+      if (queryError) {
+        console.error("Error cargando reservas:", queryError);
+        setError("No se pudieron cargar los datos de las reservas.");
+        setLoading(false);
+        return;
+      }
+      setAppointments(appointmentsResult.data ?? []);
+      setPayments(paymentsResult.data ?? []);
+      setCustomers(customersResult.data ?? []);
+      setLoading(false);
+    }
+    loadReservations();
+  }, []);
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
     setAppointments((prev) =>
@@ -43,6 +80,14 @@ export default function AdminReservasPage() {
     (a) => statusFilter === "all" || a.status === statusFilter
   );
 
+  if (loading) {
+    return <div className="p-6">Cargando reservas...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-red-600">{error}</div>;
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -70,11 +115,10 @@ export default function AdminReservasPage() {
               key={f.id}
               type="button"
               onClick={() => setStatusFilter(f.id)}
-              className={`px-3.5 py-2 rounded-full font-medium transition-colors ${
-                statusFilter === f.id
-                  ? "bg-[#2D2C28] text-[#FAF9F7]"
-                  : "bg-[#F1EDE4] text-[#5B5650] hover:bg-[#E3DAC9]"
-              }`}
+              className={`px-3.5 py-2 rounded-full font-medium transition-colors ${statusFilter === f.id
+                ? "bg-[#2D2C28] text-[#FAF9F7]"
+                : "bg-[#F1EDE4] text-[#5B5650] hover:bg-[#E3DAC9]"
+                }`}
             >
               {f.label}
             </button>
@@ -85,7 +129,7 @@ export default function AdminReservasPage() {
       {/* Lista de citas */}
       <div className="space-y-4">
         {filteredAppointments.map((apt) => {
-          const customer = INITIAL_CUSTOMERS.find(
+          const customer = customers.find(
             (c) => c.id === apt.customer_id
           );
           const aptPayments = payments.filter((p) => p.appointment_id === apt.id);
@@ -105,15 +149,14 @@ export default function AdminReservasPage() {
                     {apt.service_name_snapshot}
                   </span>
                   <span
-                    className={`px-3 py-0.5 rounded-full text-[11px] font-medium ${
-                      apt.status === "confirmed"
-                        ? "bg-[#E3DAC9] text-[#2D2C28]"
-                        : apt.status === "completed"
+                    className={`px-3 py-0.5 rounded-full text-[11px] font-medium ${apt.status === "confirmed"
+                      ? "bg-[#E3DAC9] text-[#2D2C28]"
+                      : apt.status === "completed"
                         ? "bg-[#2D2C28] text-[#FAF9F7]"
                         : apt.status === "pending_payment"
-                        ? "bg-[#F1EDE4] border border-[#B6AEA1] text-[#5B5650]"
-                        : "bg-[#EBE5D9] text-[#878378]"
-                    }`}
+                          ? "bg-[#F1EDE4] border border-[#B6AEA1] text-[#5B5650]"
+                          : "bg-[#EBE5D9] text-[#878378]"
+                      }`}
                   >
                     Estado: {apt.status}
                   </span>

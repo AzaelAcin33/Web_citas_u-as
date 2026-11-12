@@ -1,21 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import {
-  INITIAL_SERVICES,
-  INITIAL_SERVICE_CATEGORIES,
-} from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
 import { NailService, ServiceCategory } from "@/lib/types";
 
 export default function AdminServiciosPage() {
-  const [categories, setCategories] = useState<ServiceCategory[]>(
-    INITIAL_SERVICE_CATEGORIES
-  );
-  const [services, setServices] = useState<NailService[]>(INITIAL_SERVICES);
-
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [services, setServices] = useState<NailService[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState(INITIAL_SERVICE_CATEGORIES[0].id);
+  const [categoryId, setCategoryId] = useState("");
   const [price, setPrice] = useState("40");
   const [duration, setDuration] = useState("75");
   const [description, setDescription] = useState("");
@@ -26,43 +22,114 @@ export default function AdminServiciosPage() {
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
 
-  const handleSaveService = (e: React.FormEvent) => {
+  useEffect(() => {
+    async function loadData() {
+      const supabase = createClient();
+      setLoading(true);
+      setError(null);
+
+      const [categoriesResult, servicesResult] = await Promise.all([
+        supabase
+          .from("service_categories")
+          .select("*")
+          .eq("is_active", true)
+          .order("sort_order"),
+
+        supabase
+          .from("services")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (categoriesResult.error || servicesResult.error) {
+        console.error(
+          "Error cargando catálogo:",
+          categoriesResult.error || servicesResult.error
+        );
+        setError("No se pudieron cargar los servicios.");
+        setLoading(false);
+        return;
+      }
+
+      setCategories(categoriesResult.data ?? []);
+      setServices(servicesResult.data ?? []);
+
+      if (categoriesResult.data?.length) {
+        setCategoryId(categoriesResult.data[0].id);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
+  const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const supabase = createClient();
+
+    if (!name.trim() || !categoryId || !description.trim()) {
+      alert("Completa todos los campos obligatorios.");
+      return;
+    }
+
+    const serviceData = {
+      name: name.trim(),
+      category_id: categoryId,
+      price: Number(price),
+      duration_minutes: Number(duration),
+      description: description.trim(),
+      image_path: imagePath.trim() || null,
+    };
+
+    if (
+      !Number.isFinite(serviceData.price) ||
+      serviceData.price <= 0 ||
+      !Number.isInteger(serviceData.duration_minutes) ||
+      serviceData.duration_minutes < 15
+    ) {
+      alert("Comprueba el precio y la duración.");
+      return;
+    }
+
+    let result;
+
+    if (editingId) {
+      result = await supabase
+        .from("services")
+        .update(serviceData)
+        .eq("id", editingId)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from("services")
+        .insert(serviceData)
+        .select()
+        .single();
+    }
+
+    if (result.error) {
+      console.error("Error guardando servicio:", result.error);
+      alert("No se pudo guardar el servicio. Comprueba los permisos.");
+      return;
+    }
+
     if (editingId) {
       setServices((prev) =>
-        prev.map((s) =>
-          s.id === editingId
-            ? {
-                ...s,
-                name,
-                category_id: categoryId,
-                price: Number(price),
-                duration_minutes: Number(duration),
-                description,
-                image_path: imagePath,
-                updated_at: new Date().toISOString(),
-              }
-            : s
+        prev.map((service) =>
+          service.id === editingId ? result.data as NailService : service
         )
       );
-      setEditingId(null);
     } else {
-      const newService: NailService = {
-        id: `srv-${Date.now()}`,
-        category_id: categoryId,
-        name,
-        description,
-        price: Number(price),
-        duration_minutes: Number(duration),
-        image_path: imagePath,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setServices((prev) => [newService, ...prev]);
+      setServices((prev) => [result.data as NailService, ...prev]);
     }
+
+    setEditingId(null);
     setName("");
     setDescription("");
+    setPrice("40");
+    setDuration("75");
+    setImagePath("");
   };
 
   const handleEditClick = (srv: NailService) => {
@@ -97,6 +164,14 @@ export default function AdminServiciosPage() {
     setNewCatName("");
     setNewCatDesc("");
   };
+
+  if (loading) {
+    return <p className="p-6">Cargando servicios...</p>;
+  }
+
+  if (error) {
+    return <p className="p-6 text-red-600">{error}</p>;
+  }
 
   return (
     <div className="space-y-10">
@@ -244,11 +319,10 @@ export default function AdminServiciosPage() {
             return (
               <div
                 key={srv.id}
-                className={`p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                  srv.is_active
-                    ? "bg-[#FAF9F7] border-[#EBE5D9]"
-                    : "bg-[#F1EDE4]/60 border-[#EBE5D9] opacity-70"
-                }`}
+                className={`p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${srv.is_active
+                  ? "bg-[#FAF9F7] border-[#EBE5D9]"
+                  : "bg-[#F1EDE4]/60 border-[#EBE5D9] opacity-70"
+                  }`}
               >
                 <div className="flex items-start gap-4">
                   <img
@@ -262,11 +336,10 @@ export default function AdminServiciosPage() {
                         {srv.name}
                       </span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                          srv.is_active
-                            ? "bg-[#E3DAC9] text-[#2D2C28]"
-                            : "bg-[#EBE5D9] text-[#878378]"
-                        }`}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${srv.is_active
+                          ? "bg-[#E3DAC9] text-[#2D2C28]"
+                          : "bg-[#EBE5D9] text-[#878378]"
+                          }`}
                       >
                         {srv.is_active ? "Visible en web" : "Oculto"}
                       </span>
