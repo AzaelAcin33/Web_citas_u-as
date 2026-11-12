@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
 import {
   INITIAL_AVAILABILITY_EXCEPTIONS,
   INITIAL_BUSINESS_HOURS,
@@ -33,6 +34,26 @@ export default function ReservasPage() {
   const [email, setEmail] = useState<string>("");
   const [phone, setPhone] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+
+  useEffect(() => {
+    async function loadUserData() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obtener datos del perfil
+      const { data: profile } = await supabase.from("profiles").select("full_name, phone").eq("id", user.id).maybeSingle();
+
+      setFullName(
+        profile?.full_name || user.user_metadata?.full_name || ""
+      );
+
+      setEmail(user.email || "");
+    }
+    loadUserData();
+  }, []);
 
   const [paymentMethod, setPaymentMethod] = useState<
     "stripe_card" | "bizum" | "apple_pay"
@@ -84,13 +105,12 @@ export default function ReservasPage() {
               key={s.num}
               type="button"
               onClick={() => !bookingConfirmed && setStep(s.num as 1 | 2 | 3)}
-              className={`px-3.5 py-2 rounded-full font-medium transition-colors ${
-                step === s.num
+              className={`px-3.5 py-2 rounded-full font-medium transition-colors ${step === s.num
                   ? "bg-[#2D2C28] text-[#FAF9F7]"
                   : step > s.num
-                  ? "bg-[#E3DAC9] text-[#2D2C28]"
-                  : "bg-[#F1EDE4] text-[#878378]"
-              }`}
+                    ? "bg-[#E3DAC9] text-[#2D2C28]"
+                    : "bg-[#F1EDE4] text-[#878378]"
+                }`}
             >
               {s.label}
             </button>
@@ -130,11 +150,10 @@ export default function ReservasPage() {
                               key={srv.id}
                               type="button"
                               onClick={() => setSelectedServiceId(srv.id)}
-                              className={`text-left p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                                isSelected
+                              className={`text-left p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${isSelected
                                   ? "bg-[#E3DAC9]/60 border-[#2D2C28] shadow-xs"
                                   : "bg-[#F7F4EF] border-[#EBE5D9] hover:border-[#B6AEA1]"
-                              }`}
+                                }`}
                             >
                               <div>
                                 <div className="flex items-start justify-between gap-2">
@@ -282,11 +301,10 @@ export default function ReservasPage() {
                           key={slot}
                           type="button"
                           onClick={() => setSelectedTime(slot)}
-                          className={`py-3 px-4 rounded-xl text-xs font-medium border transition-all ${
-                            active
+                          className={`py-3 px-4 rounded-xl text-xs font-medium border transition-all ${active
                               ? "bg-[#2D2C28] text-[#FAF9F7] border-[#2D2C28]"
                               : "bg-[#F7F4EF] text-[#2D2C28] border-[#EBE5D9] hover:border-[#B6AEA1]"
-                          }`}
+                            }`}
                         >
                           {slot} h
                         </button>
@@ -438,17 +456,15 @@ export default function ReservasPage() {
                           pm.id as "stripe_card" | "bizum" | "apple_pay"
                         )
                       }
-                      className={`p-3.5 rounded-xl border text-left transition-all ${
-                        paymentMethod === pm.id
+                      className={`p-3.5 rounded-xl border text-left transition-all ${paymentMethod === pm.id
                           ? "bg-[#2D2C28] text-[#FAF9F7] border-[#2D2C28]"
                           : "bg-[#FAF9F7] text-[#2D2C28] border-[#EBE5D9]"
-                      }`}
+                        }`}
                     >
                       <span className="block text-xs font-semibold">{pm.title}</span>
                       <span
-                        className={`block text-[11px] mt-0.5 ${
-                          paymentMethod === pm.id ? "text-[#E3DAC9]" : "text-[#878378]"
-                        }`}
+                        className={`block text-[11px] mt-0.5 ${paymentMethod === pm.id ? "text-[#E3DAC9]" : "text-[#878378]"
+                          }`}
                       >
                         {pm.sub}
                       </span>
