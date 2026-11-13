@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { Appointment, AppointmentStatus, PaymentRecord } from "@/lib/types";
+import { cancelAppointment } from "../appointments";
 
 export default function AdminReservasPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -56,6 +57,28 @@ export default function AdminReservasPage() {
       prev.map((a) => (a.id === id ? { ...a, status } : a))
     );
   };
+
+  const handleCancelAppointment = async (id: string) => {
+    const confirmed = window.confirm(
+      "¿Seguro que quieres cancelar la reserva?"
+    );
+
+    if (!confirmed) return;
+    const result = await cancelAppointment(id);
+
+    if (!result.success) {
+      alert(result.message);
+      return;
+    }
+
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === id ? { ...apt, status: "cancelled" } : apt
+      )
+    );
+
+    alert(result.message);
+  }
 
   const registerRemainingPayment = (apt: Appointment) => {
     const remaining = apt.price_snapshot - apt.deposit_required;
@@ -223,7 +246,7 @@ export default function AdminReservasPage() {
                   {apt.status !== "cancelled" && (
                     <button
                       type="button"
-                      onClick={() => updateAppointmentStatus(apt.id, "cancelled")}
+                      onClick={() => handleCancelAppointment(apt.id)}
                       className="px-4 py-2 rounded-xl border border-[#EBE5D9] text-[#878378] hover:text-[#2D2C28]"
                     >
                       Cancelar cita
