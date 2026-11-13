@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { Appointment, AppointmentStatus, PaymentRecord } from "@/lib/types";
-import { cancelAppointment } from "../appointments";
+import { cancelAppointment, confirmManualDeposit, registerRemainingPayment } from "../appointments";
 
 export default function AdminReservasPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -80,23 +80,74 @@ export default function AdminReservasPage() {
     alert(result.message);
   }
 
-  const registerRemainingPayment = (apt: Appointment) => {
-    const remaining = apt.price_snapshot - apt.deposit_required;
-    const newPay: PaymentRecord = {
-      id: `pay-${Date.now()}`,
-      appointment_id: apt.id,
-      enrollment_id: null,
-      amount: remaining,
-      currency: "EUR",
-      payment_type: "remaining",
-      status: "approved",
-      provider: "TPV Local / Efectivo",
-      provider_reference: `LOCAL-${apt.id}`,
-      created_at: new Date().toISOString(),
-      paid_at: new Date().toISOString(),
-    };
-    setPayments((prev) => [newPay, ...prev]);
-    updateAppointmentStatus(apt.id, "completed");
+  const handleConfirmDeposit = async (id: string) => {
+    const confirmed = window.confirm(
+      "¿Has comprobado que has recibido el anticipo del 50%?"
+    );
+    if (!confirmed) return;
+
+    const result = await confirmManualDeposit(id);
+
+    if (!result.success) {
+      alert(result.message);
+      return;
+    }
+
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === id ? { ...apt, status: "confirmed" } : apt
+      )
+    );
+
+    const supabase = createClient();
+    const { data } = await supabase.from("payments").select("*").eq("appointment_id", id);
+
+    if (data) setPayments((prev) => [
+      ...prev.filter((payment) => payment.appointment_id !== id),
+      ...data,
+    ]);
+    alert(result.message);
+  }
+
+  const handleRegisterRemainingPayment = async (apt: Appointment) => {
+    const confirmed = window.confirm(
+      `¿Has recibido los ${apt.price_snapshot - apt.deposit_required} € restantes de esta reserva?`
+    );
+
+    if (!confirmed) return;
+
+    const result = await registerRemainingPayment(apt.id);
+
+    if (!result.success) {
+      alert(result.message);
+      return;
+    }
+
+    setAppointments((prev) =>
+      prev.map((appointment) =>
+        appointment.id === apt.id
+          ? { ...appointment, status: "completed" }
+          : appointment
+      )
+    );
+
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("appointment_id", apt.id);
+
+    if (error) {
+      console.error("Error actualizando pagos:", error);
+    } else if (data) {
+      setPayments((prev) => [
+        ...prev.filter((payment) => payment.appointment_id !== apt.id),
+        ...data,
+      ]);
+    }
+
+    alert(result.message);
   };
 
   const filteredAppointments = appointments.filter(
@@ -228,7 +279,7 @@ export default function AdminReservasPage() {
                   {apt.status === "pending_payment" && (
                     <button
                       type="button"
-                      onClick={() => updateAppointmentStatus(apt.id, "confirmed")}
+                      onClick={() => handleConfirmDeposit(apt.id)}
                       className="px-4 py-2 rounded-xl bg-[#E3DAC9] text-[#2D2C28] font-medium hover:bg-[#B6AEA1]"
                     >
                       Confirmar Anticipo Manual
@@ -237,7 +288,7 @@ export default function AdminReservasPage() {
                   {apt.status === "confirmed" && pendingAmount > 0 && (
                     <button
                       type="button"
-                      onClick={() => registerRemainingPayment(apt)}
+                      onClick={() => handleRegisterRemainingPayment(apt)}
                       className="px-4 py-2 rounded-xl bg-[#2D2C28] text-[#FAF9F7] font-medium hover:bg-[#5B5650]"
                     >
                       Cobrar 50% Restante ({pendingAmount} €) y Completar
