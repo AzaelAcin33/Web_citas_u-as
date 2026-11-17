@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { createClient } from "@/lib/supabase";
 import {
-  INITIAL_AVAILABILITY_EXCEPTIONS,
-  INITIAL_BUSINESS_HOURS,
-  INITIAL_SERVICES,
-  INITIAL_SERVICE_CATEGORIES,
-} from "@/lib/mock-data";
+  NailService,
+  ServiceCategory,
+  BusinessHour,
+  AvailabilityException,
+} from "@/lib/types";
 
 const AVAILABLE_TIME_SLOTS = [
   "09:30",
@@ -21,10 +21,14 @@ const AVAILABLE_TIME_SLOTS = [
 ];
 
 export default function ReservasPage() {
+  const [services, setServices] = useState<NailService[]>([]);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState<string | null>(null);
+  const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
+  const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [selectedServiceId, setSelectedServiceId] = useState<string>(
-    INITIAL_SERVICES[0].id
-  );
+  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [nailShape, setNailShape] = useState<string>("Almendra de salón");
   const [needsRemoval, setNeedsRemoval] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>("2026-11-18");
@@ -55,14 +59,72 @@ export default function ReservasPage() {
     loadUserData();
   }, []);
 
+  useEffect(() => {
+    async function loadServices() {
+      const supabase = createClient();
+
+      setServicesLoading(true);
+      setServicesError(null);
+
+      const { data: categoriesData, error: categoriesError } =
+        await supabase
+          .from("service_categories")
+          .select("*")
+          .eq("is_active", true)
+          .order("sort_order");
+
+      if (categoriesError) {
+        console.error("Error cargando categorias:", categoriesError);
+        setServicesError("No se pudieron cargar las categorías.");
+        setServicesLoading(false);
+        return;
+      }
+      const { data: servicesData, error: servicesQueryError } =
+        await supabase
+          .from("services")
+          .select("*")
+          .eq("is_active", true)
+          .order("name");
+
+      if (servicesQueryError) {
+        console.error("Error cargando servicios:", servicesQueryError);
+        setServicesError("No se pudieron cargar las servicios.");
+        setServicesLoading(false);
+        return;
+      }
+      const loadedCategories = (categoriesData ?? []) as ServiceCategory[];
+      const loadedServices = (servicesData ?? []) as NailService[];
+
+      setCategories(loadedCategories);
+      setServices(loadedServices);
+
+      if (loadedServices.length > 0) {
+        setSelectedServiceId(loadedServices[0].id);
+      }
+      setServicesLoading(false);
+    }
+    loadServices();
+  }, []);
+
   const [paymentMethod, setPaymentMethod] = useState<
     "stripe_card" | "bizum" | "apple_pay"
   >("stripe_card");
   const [bookingConfirmed, setBookingConfirmed] = useState<boolean>(false);
 
-  const selectedService =
-    INITIAL_SERVICES.find((s) => s.id === selectedServiceId) ||
-    INITIAL_SERVICES[0];
+  const selectedService = services.find(
+    (s) => s.id === selectedServiceId
+  ) ?? {
+    id: "",
+    category_id: "",
+    name: "",
+    description: "",
+    price: 0,
+    duration_minutes: 0,
+    image_path: "",
+    is_active: false,
+    created_at: "",
+    updated_at: "",
+  };
 
   const extraRemovalPrice = needsRemoval ? 10 : 0;
   const extraRemovalMinutes = needsRemoval ? 20 : 0;
@@ -106,10 +168,10 @@ export default function ReservasPage() {
               type="button"
               onClick={() => !bookingConfirmed && setStep(s.num as 1 | 2 | 3)}
               className={`px-3.5 py-2 rounded-full font-medium transition-colors ${step === s.num
-                  ? "bg-[#2D2C28] text-[#FAF9F7]"
-                  : step > s.num
-                    ? "bg-[#E3DAC9] text-[#2D2C28]"
-                    : "bg-[#F1EDE4] text-[#878378]"
+                ? "bg-[#2D2C28] text-[#FAF9F7]"
+                : step > s.num
+                  ? "bg-[#E3DAC9] text-[#2D2C28]"
+                  : "bg-[#F1EDE4] text-[#878378]"
                 }`}
             >
               {s.label}
@@ -133,10 +195,12 @@ export default function ReservasPage() {
               </div>
 
               <div className="space-y-6">
-                {INITIAL_SERVICE_CATEGORIES.map((category) => {
-                  const catServices = INITIAL_SERVICES.filter(
-                    (srv) => srv.category_id === category.id && srv.is_active
+                {categories.map((category) => {
+                  const catServices = services.filter(
+                    (srv) => srv.category_id === category.id
                   );
+
+                  if (catServices.length === 0) return null;
                   return (
                     <div key={category.id} className="space-y-3">
                       <h3 className="text-xs uppercase tracking-wider font-semibold text-[#878378] border-b border-[#EBE5D9] pb-1.5">
@@ -151,8 +215,8 @@ export default function ReservasPage() {
                               type="button"
                               onClick={() => setSelectedServiceId(srv.id)}
                               className={`text-left p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${isSelected
-                                  ? "bg-[#E3DAC9]/60 border-[#2D2C28] shadow-xs"
-                                  : "bg-[#F7F4EF] border-[#EBE5D9] hover:border-[#B6AEA1]"
+                                ? "bg-[#E3DAC9]/60 border-[#2D2C28] shadow-xs"
+                                : "bg-[#F7F4EF] border-[#EBE5D9] hover:border-[#B6AEA1]"
                                 }`}
                             >
                               <div>
@@ -276,7 +340,7 @@ export default function ReservasPage() {
                     <p className="font-semibold text-[#2D2C28]">
                       Horario habitual del estudio:
                     </p>
-                    {INITIAL_BUSINESS_HOURS.map((bh) => (
+                    {businessHours.map((bh) => (
                       <div key={bh.id} className="flex justify-between text-[#5B5650]">
                         <span>{bh.weekday_label}</span>
                         <span>
@@ -302,8 +366,8 @@ export default function ReservasPage() {
                           type="button"
                           onClick={() => setSelectedTime(slot)}
                           className={`py-3 px-4 rounded-xl text-xs font-medium border transition-all ${active
-                              ? "bg-[#2D2C28] text-[#FAF9F7] border-[#2D2C28]"
-                              : "bg-[#F7F4EF] text-[#2D2C28] border-[#EBE5D9] hover:border-[#B6AEA1]"
+                            ? "bg-[#2D2C28] text-[#FAF9F7] border-[#2D2C28]"
+                            : "bg-[#F7F4EF] text-[#2D2C28] border-[#EBE5D9] hover:border-[#B6AEA1]"
                             }`}
                         >
                           {slot} h
@@ -316,7 +380,7 @@ export default function ReservasPage() {
                     <strong className="text-[#2D2C28] block mb-1">
                       Días con horario especial o cierre:
                     </strong>
-                    {INITIAL_AVAILABILITY_EXCEPTIONS.map((exc) => (
+                    {availabilityExceptions.map((exc) => (
                       <p key={exc.id}>
                         - {new Date(exc.starts_at).toLocaleDateString("es-ES")}: {exc.reason}
                       </p>
@@ -457,8 +521,8 @@ export default function ReservasPage() {
                         )
                       }
                       className={`p-3.5 rounded-xl border text-left transition-all ${paymentMethod === pm.id
-                          ? "bg-[#2D2C28] text-[#FAF9F7] border-[#2D2C28]"
-                          : "bg-[#FAF9F7] text-[#2D2C28] border-[#EBE5D9]"
+                        ? "bg-[#2D2C28] text-[#FAF9F7] border-[#2D2C28]"
+                        : "bg-[#FAF9F7] text-[#2D2C28] border-[#EBE5D9]"
                         }`}
                     >
                       <span className="block text-xs font-semibold">{pm.title}</span>
