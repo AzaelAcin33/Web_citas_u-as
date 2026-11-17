@@ -1,26 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
 import {
-  INITIAL_AVAILABILITY_EXCEPTIONS,
-  INITIAL_BUSINESS_HOURS,
-  INITIAL_BUSINESS_SETTINGS,
-} from "@/lib/mock-data";
+  BusinessSettings,
+  BusinessHour,
+  AvailabilityException,
+} from "@/lib/types";
 
 export default function AdminConfiguracionPage() {
-  const [settings, setSettings] = useState(INITIAL_BUSINESS_SETTINGS);
-  const [hours, setHours] = useState(INITIAL_BUSINESS_HOURS);
-  const [exceptions, setExceptions] = useState(INITIAL_AVAILABILITY_EXCEPTIONS);
+  const [settings, setSettings] = useState<BusinessSettings | null>(null);
+  const [hours, setHours] = useState<BusinessHour[]>([]);
+  const [exceptions, setExceptions] = useState<AvailabilityException[]>([]);
+
   const [excStart, setExcStart] = useState("2026-12-24");
   const [excEnd, setExcEnd] = useState("2026-12-25");
   const [excReason, setExcReason] = useState("");
   const [savedNotice, setSavedNotice] = useState(false);
-
-  const handleSaveBusiness = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!settings) return;
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("business_settings")
+      .update({
+        business_name: settings.business_name,
+        description: settings.description,
+        phone: settings.phone,
+        whatsapp: settings.whatsapp,
+        email: settings.email,
+        address: settings.address,
+      }).eq("id", settings.id);
+
+    if (error) {
+      console.error("Error guardando datos:", error);
+      alert("No se pudieron guardar los datos del negocio.");
+      return;
+    }
+
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 3000);
   };
+
+  useEffect(() => {
+    async function loadConfiguration() {
+      const supabase = createClient();
+      const [settingsResult, hoursResult, exceptionsResult] =
+        await Promise.all([
+          supabase.from("business_settings").select("*").limit(1).maybeSingle(),
+
+          supabase
+            .from("business_hours")
+            .select("id, weekday, opens_at, closes_at, is_closed")
+            .order("weekday"),
+
+          supabase
+            .from("availability_exceptions")
+            .select("*")
+            .order("starts_at")
+        ]);
+      if (
+        settingsResult.error ||
+        hoursResult.error ||
+        exceptionsResult.error
+      ) {
+        console.error(
+          "Error cargando configuración:",
+          settingsResult.error ||
+          hoursResult.error ||
+          exceptionsResult.error
+        );
+        setError("No se pudo cargar la configuración");
+        setLoading(false);
+        return;
+      }
+      setSettings(settingsResult.data);
+      const weekdays = [
+        "Domingo",
+        "Lunes",
+        "Martes",
+        "Miércoles",
+        "Jueves",
+        "Viernes",
+        "Sábado",
+      ];
+
+      setHours(
+        (hoursResult.data ?? []).map((hour) => ({
+          ...hour,
+          weekday_label: weekdays[hour.weekday],
+        }))
+      );
+
+      setExceptions(exceptionsResult.data ?? []);
+      setLoading(false);
+    }
+    loadConfiguration();
+  }, []);
 
   const handleAddException = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +115,22 @@ export default function AdminConfiguracionPage() {
     ]);
     setExcReason("");
   };
+
+  if (loading) {
+    return <p className="p-8">Cargando configuración...</p>;
+  }
+
+  if (error) {
+    return <p className="p-8 text-red-600">{error}</p>;
+  }
+
+  if (!settings) {
+    return (
+      <p className="p-8">
+        No se ha encontrado la configuración del negocio en Supabase.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-10 text-xs">
@@ -192,11 +287,11 @@ export default function AdminConfiguracionPage() {
                       prev.map((item, i) =>
                         i === idx
                           ? {
-                              ...item,
-                              is_closed: !item.is_closed,
-                              opens_at: item.is_closed ? "09:30" : null,
-                              closes_at: item.is_closed ? "20:00" : null,
-                            }
+                            ...item,
+                            is_closed: !item.is_closed,
+                            opens_at: item.is_closed ? "09:30" : null,
+                            closes_at: item.is_closed ? "20:00" : null,
+                          }
                           : item
                       )
                     )
