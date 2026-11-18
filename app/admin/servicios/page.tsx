@@ -142,9 +142,28 @@ export default function AdminServiciosPage() {
     setImagePath(srv.image_path);
   };
 
-  const toggleServiceActive = (id: string) => {
+  const toggleServiceActive = async (id: string) => {
+    const service = services.find((s) => s.id === id);
+
+    if (!service) return;
+
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from("services")
+      .update({ is_active: !service.is_active })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error cambiando visibilidad:", error);
+      alert("No se pudo cambiar la visibilidad del servicio.");
+      return;
+    }
+
     setServices((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, is_active: !s.is_active } : s))
+      prev.map((s) => (s.id === id ? (data as NailService) : s))
     );
   };
 

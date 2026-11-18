@@ -1,27 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import {
-  INITIAL_SERVICES,
-  INITIAL_SERVICE_CATEGORIES,
-} from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
+import { NailService, ServiceCategory } from "@/lib/types";
 
 export default function ServiciosPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [services, setServices] = useState<NailService[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const activeCategories = INITIAL_SERVICE_CATEGORIES.filter((c) => c.is_active).sort(
-    (a, b) => a.sort_order - b.sort_order
-  );
+  useEffect(() => {
+    async function loadCatalog() {
+      const supabase = createClient();
+      const [categoriesResult, servicesResult] = await Promise.all([
+        supabase
+          .from("service_categories")
+          .select("*")
+          .eq("is_active", true)
+          .order("sort_order"),
 
-  const filteredServices = INITIAL_SERVICES.filter((srv) => {
-    if (!srv.is_active) return false;
+        supabase
+          .from("services")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (categoriesResult.error || servicesResult.error) {
+        console.error(categoriesResult.error || servicesResult.error);
+        setError(true);
+        setLoading(false);
+        return;
+      }
+      setCategories(categoriesResult.data ?? []);
+      setServices(servicesResult.data ?? []);
+      setLoading(false);
+    }
+    loadCatalog();
+  }, []);
+
+  const activeCategories = categories;
+
+  const filteredServices = services.filter((srv) => {
     const matchesCat =
       selectedCategory === "all" || srv.category_id === selectedCategory;
+
     const matchesQuery =
       srv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       srv.description.toLowerCase().includes(searchQuery.toLowerCase());
+
     return matchesCat && matchesQuery;
   });
 
@@ -49,24 +80,22 @@ export default function ServiciosPage() {
           <button
             type="button"
             onClick={() => setSelectedCategory("all")}
-            className={`px-4 py-2 rounded-full text-xs font-medium transition-all ${
-              selectedCategory === "all"
-                ? "bg-[#2D2C28] text-[#FAF9F7]"
-                : "bg-[#FAF9F7] text-[#5B5650] border border-[#EBE5D9] hover:bg-[#E3DAC9]"
-            }`}
+            className={`px-4 py-2 rounded-full text-xs font-medium transition-all ${selectedCategory === "all"
+              ? "bg-[#2D2C28] text-[#FAF9F7]"
+              : "bg-[#FAF9F7] text-[#5B5650] border border-[#EBE5D9] hover:bg-[#E3DAC9]"
+              }`}
           >
-            Todos los servicios ({INITIAL_SERVICES.length})
+            Todos los servicios ({services.length})
           </button>
           {activeCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-full text-xs font-medium transition-all ${
-                selectedCategory === cat.id
-                  ? "bg-[#2D2C28] text-[#FAF9F7]"
-                  : "bg-[#FAF9F7] text-[#5B5650] border border-[#EBE5D9] hover:bg-[#E3DAC9]"
-              }`}
+              className={`px-4 py-2 rounded-full text-xs font-medium transition-all ${selectedCategory === cat.id
+                ? "bg-[#2D2C28] text-[#FAF9F7]"
+                : "bg-[#FAF9F7] text-[#5B5650] border border-[#EBE5D9] hover:bg-[#E3DAC9]"
+                }`}
             >
               {cat.name}
             </button>
@@ -83,6 +112,24 @@ export default function ServiciosPage() {
           />
         </div>
       </div>
+
+      {loading && (
+        <p className="text-center text-sm text-[#5B5650]">
+          Cargando servicios...
+        </p>
+      )}
+
+      {error && (
+        <p className="text-center text-sm text-red-600">
+          No se han podido cargar los servicios. Inténtalo de nuevo.
+        </p>
+      )}
+
+      {!loading && !error && filteredServices.length === 0 && (
+        <p className="text-center text-sm text-[#5B5650]">
+          No hay servicios disponibles en esta categoría.
+        </p>
+      )}
 
       {/* Listado de servicios */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
