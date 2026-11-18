@@ -18,9 +18,21 @@ export default function AdminServiciosPage() {
   const [imagePath, setImagePath] = useState(
     "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=900&q=85"
   );
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
 
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
+
+  useEffect(() => {
+    if (!selectedImage) {
+      setImagePreview("");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(selectedImage);
+    setImagePreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [selectedImage]);
 
   useEffect(() => {
     async function loadData() {
@@ -72,13 +84,48 @@ export default function AdminServiciosPage() {
       return;
     }
 
+    let finalImagePath = imagePath;
+
+    if (selectedImage) {
+      if (!selectedImage.type.startsWith("image/")) {
+        alert("Selecciona un archivo de imagén válido");
+        return;
+      }
+
+      if (selectedImage.size > 10 * 1024 * 1024) {
+        alert("La imagen no puede superar los 10 MB");
+        return;
+      }
+
+      const supabase = createClient();
+      const safeName = selectedImage.name
+        .replace(/[^a-zA-Z0-9.-]/g, "-");
+
+      const filePath = `services/${crypto.randomUUID()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("business-media")
+        .upload(filePath, selectedImage);
+
+      if (uploadError) {
+        console.error("Error subiendo imagen:", uploadError);
+        alert("No se pudo subir la fotografía.");
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("business-media")
+        .getPublicUrl(filePath);
+      finalImagePath = publicUrlData.publicUrl;
+    }
+
     const serviceData = {
       name: name.trim(),
       category_id: categoryId,
       price: Number(price),
       duration_minutes: Number(duration),
       description: description.trim(),
-      image_path: imagePath.trim() || null,
+      image_path: finalImagePath?.trim() || null,
     };
 
     if (
@@ -130,6 +177,7 @@ export default function AdminServiciosPage() {
     setPrice("40");
     setDuration("75");
     setImagePath("");
+    setSelectedImage(null);
   };
 
   const handleEditClick = (srv: NailService) => {
@@ -139,7 +187,8 @@ export default function AdminServiciosPage() {
     setPrice(String(srv.price));
     setDuration(String(srv.duration_minutes));
     setDescription(srv.description);
-    setImagePath(srv.image_path);
+    setImagePath(srv.image_path ?? "");
+    setSelectedImage(null);
   };
 
   const toggleServiceActive = async (id: string) => {
@@ -339,15 +388,32 @@ export default function AdminServiciosPage() {
           </div>
 
           <div>
-            <label className="block font-medium text-[#2D2C28] mb-1">
-              URL o ruta de fotografía
+            <label className="block font-medium text-[#2D2C28] mb-2">
+              Fotografía del servicio
             </label>
+
             <input
-              type="text"
-              value={imagePath}
-              onChange={(e) => setImagePath(e.target.value)}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              onChange={(e) => {
+                setSelectedImage(e.target.files?.[0] ?? null);
+              }}
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7F4EF] border border-[#B6AEA1]"
             />
+
+            {(imagePreview || imagePath) && (
+              <div className="mt-3">
+                <img
+                  src={imagePreview || imagePath}
+                  alt="Vista previa del servicio"
+                  className="w-32 h-32 rounded-xl object-cover border border-[#B6AEA1]"
+                />
+              </div>
+            )}
+
+            <p className="text-[10px] text-[#878378] mt-2">
+              JPG, PNG, WebP o AVIF. Máximo 10 MB.
+            </p>
           </div>
 
           <button
