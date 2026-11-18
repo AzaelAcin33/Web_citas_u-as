@@ -167,21 +167,48 @@ export default function AdminServiciosPage() {
     );
   };
 
-  const handleAddCategory = (e: React.FormEvent) => {
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName.trim()) return;
-    setCategories((prev) => [
-      ...prev,
-      {
-        id: `cat-${Date.now()}`,
-        name: newCatName,
-        description: newCatDesc,
-        sort_order: prev.length + 1,
+
+    if (!newCatName.trim()) {
+      alert("Escribe el nombre de la categoría.");
+      return;
+    }
+
+    const supabase = createClient();
+
+    const nextOrder =
+      categories.length > 0
+        ? Math.max(...categories.map((cat) => cat.sort_order)) + 1
+        : 1;
+
+    const { data, error } = await supabase
+      .from("service_categories")
+      .insert({
+        name: newCatName.trim(),
+        description: newCatDesc.trim(),
+        sort_order: nextOrder,
         is_active: true,
-      },
-    ]);
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creando categoría:", error);
+      alert("No se pudo crear la categoría. Comprueba los permisos.");
+      return;
+    }
+
+    setCategories((prev) =>
+      [...prev, data as ServiceCategory].sort(
+        (a, b) => a.sort_order - b.sort_order
+      )
+    );
+
     setNewCatName("");
     setNewCatDesc("");
+
+    alert("¡Categoría creada correctamente!");
   };
 
   if (loading) {
