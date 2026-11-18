@@ -37,13 +37,23 @@ export default function ServiciosPage() {
         return;
       }
       setCategories(categoriesResult.data ?? []);
-      setServices(servicesResult.data ?? []);
+      const activeCategoryIds = new Set(
+        (categoriesResult.data ?? []).map((cat) => cat.id)
+      );
+
+      setServices(
+        (servicesResult.data ?? []).filter((service) =>
+          activeCategoryIds.has(service.category_id)
+        )
+      );
       setLoading(false);
     }
     loadCatalog();
   }, []);
 
-  const activeCategories = categories;
+  const activeCategories = categories.filter((cat) =>
+    services.some((service) => service.category_id === cat.id)
+  );
 
   const filteredServices = services.filter((srv) => {
     const matchesCat =

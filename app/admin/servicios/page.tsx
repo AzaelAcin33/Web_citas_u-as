@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { NailService, ServiceCategory } from "@/lib/types";
 
@@ -23,6 +23,9 @@ export default function AdminServiciosPage() {
 
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatDesc, setEditCatDesc] = useState("");
 
   useEffect(() => {
     if (!selectedImage) {
@@ -44,7 +47,6 @@ export default function AdminServiciosPage() {
         supabase
           .from("service_categories")
           .select("*")
-          .eq("is_active", true)
           .order("sort_order"),
 
         supabase
@@ -178,6 +180,82 @@ export default function AdminServiciosPage() {
     setDuration("75");
     setImagePath("");
     setSelectedImage(null);
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategoryId || !editCatName.trim()) {
+      alert("Escribe el nombre de la categoria.");
+      return;
+    }
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("service_categories")
+      .update({
+        name: editCatName.trim(),
+        description: editCatDesc.trim(),
+      })
+      .eq("id", editingCategoryId)
+      .select()
+      .single();
+    if (error) {
+      console.error("Error actualizando categoría:", error);
+      alert("No se pudo actualizar la categoría.");
+      return;
+    }
+
+    setCategories((prev) =>
+      prev.map((cat) =>
+        cat.id === editingCategoryId ? (data as ServiceCategory) : cat
+      )
+    );
+
+    setEditingCategoryId(null);
+    setEditCatName("");
+    setEditCatDesc("");
+    alert("Categoria actualizada correctamente")
+  };
+
+  const toggleCategoryActive = async (cat: ServiceCategory) => {
+    const supabase = createClient();
+
+    if (cat.is_active) {
+      const { count, error: countError } = await supabase
+        .from("services")
+        .select("*", { count: "exact", head: true })
+        .eq("category_id", cat.id)
+        .eq("is_active", true);
+
+      if (countError) {
+        console.error("Error comprobando servicios:", countError);
+        alert("No se pudo comprobar si la categoría tiene servicios activos.");
+        return;
+      }
+
+      if (count && count > 0) {
+        alert(`No puedes desactivar esta categoría porque tiene ${count} servicio(s) activo(s). Ocúltalos primero.`);
+        return;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("service_categories")
+      .update({ is_active: !cat.is_active })
+      .eq("id", cat.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error cambiando categoría:", error);
+      alert("No se pudo cambiar el estado de la categoría.");
+      return;
+    }
+
+    setCategories((prev) =>
+      prev.map((c) => c.id === cat.id ? data as ServiceCategory : c)
+    );
+
+    alert(data.is_active ? "¡Categoría activada!" : "Categoría desactivada.");
   };
 
   const handleEditClick = (srv: NailService) => {
@@ -513,9 +591,76 @@ export default function AdminServiciosPage() {
                 {cat.name}
               </strong>
               <p className="text-[#5B5650]">{cat.description}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCategoryId(cat.id);
+                  setEditCatName(cat.name);
+                  setEditCatDesc(cat.description || "");
+                }}
+                className="mt-2 px-3 py-1.5 rounded-lg bg-[#F1EDE4] border border-[#B6AEA1] text-[#2D2C28] hover:bg-[#E3DAC9]"
+              >
+                Editar categoría
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleCategoryActive(cat)}
+                className="mt-2 ml-2 px-3 py-1.5 rounded-lg bg-[#F1EDE4] border border-[#B6AEA1] text-[#2D2C28]"
+              >
+                {cat.is_active ? "Desactivar" : "Activar"}
+              </button>
             </div>
           ))}
         </div>
+
+        {editingCategoryId && (
+          <form
+            onSubmit={handleUpdateCategory}
+            className="p-4 rounded-2xl bg-[#FAF9F7] border border-[#B6AEA1] space-y-3 text-xs"
+          >
+            <h3 className="font-serif text-lg font-semibold text-[#2D2C28]">
+              Editar categoría
+            </h3>
+
+            <input
+              type="text"
+              value={editCatName}
+              onChange={(e) => setEditCatName(e.target.value)}
+              placeholder="Nombre de la categoría"
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7F4EF] border border-[#B6AEA1]"
+            />
+
+            <input
+              type="text"
+              value={editCatDesc}
+              onChange={(e) => setEditCatDesc(e.target.value)}
+              placeholder="Descripción"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7F4EF] border border-[#B6AEA1]"
+            />
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-[#2D2C28] text-white"
+              >
+                Guardar cambios
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCategoryId(null);
+                  setEditCatName("");
+                  setEditCatDesc("");
+                }}
+                className="px-4 py-2 rounded-lg border border-[#B6AEA1]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
 
         <form
           onSubmit={handleAddCategory}
