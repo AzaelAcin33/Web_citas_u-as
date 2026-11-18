@@ -20,12 +20,93 @@ const AVAILABLE_TIME_SLOTS = [
   "18:30",
 ];
 
+function hasTimeConflict(
+  slot: string,
+  durationMinutes: number,
+  bookedAppointments: { starts_at: string; ends_at: string }[],
+  selectedDate: string
+) {
+  const [hours, minutes] = slot.split(":").map(Number);
+
+  const slotStart = new Date(selectedDate);
+  slotStart.setHours(hours, minutes, 0, 0);
+
+  const slotEnd = new Date(
+    slotStart.getTime() + durationMinutes * 60 * 1000
+  );
+
+  return bookedAppointments.some((appointment) => {
+    const bookedStart = new Date(appointment.starts_at);
+    const bookedEnd = new Date(appointment.ends_at);
+
+    return slotStart < bookedEnd && slotEnd > bookedStart;
+  });
+}
+
+function isSlotAvailable(
+  slot: string,
+  durationMinutes: number,
+  selectedDate: string,
+  businessHours: BusinessHour[],
+  availabilityExceptions: AvailabilityException[],
+  bookedAppointments: { starts_at: string; ends_at: string }[]
+) {
+  const date = new Date(`${selectedDate}T00:00:00Z`);
+  const weekday = date.getUTCDay();
+  const businessHour = businessHours.find(
+    (hour) => hour.weekday === weekday
+  );
+
+  if (!businessHour || businessHour.is_closed) {
+    return false;
+  }
+
+  if (!businessHour.opens_at || !businessHour.closes_at) {
+    return false;
+  }
+
+  const slotStart = new Date(`${selectedDate}T${slot}:00`);
+  const slotEnd = new Date(
+    slotStart.getTime() + durationMinutes * 60 * 1000
+  );
+
+  const openingTime = businessHour.opens_at.slice(0, 5);
+  const closingTime = businessHour.closes_at!.slice(0, 5);
+
+  const closingDate = new Date(`${selectedDate}T${closingTime}:00`);
+
+  if (
+    slot < openingTime || slotEnd > closingDate
+  ) {
+    return false;
+  }
+
+  const hasException = availabilityExceptions.some((exception) => {
+    const exceptionStart = new Date(exception.starts_at);
+    const exceptionEnd = new Date(exception.ends_at);
+
+    return slotStart < exceptionEnd && slotEnd > exceptionStart;
+  });
+
+  if (hasException) {
+    return false;
+  }
+
+  return !hasTimeConflict(
+    slot, durationMinutes, bookedAppointments, selectedDate
+  );
+}
+
 export default function ReservasPage() {
   const [services, setServices] = useState<NailService[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState<string | null>(null);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
+  const [bookedAppointments, setBookedAppointments] = useState<
+    { starts_at: string; ends_at: string }[]
+  >([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityExceptions, setAvailabilityExceptions] = useState<AvailabilityException[]>([]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
@@ -33,6 +114,7 @@ export default function ReservasPage() {
   const [needsRemoval, setNeedsRemoval] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>("2026-11-18");
   const [selectedTime, setSelectedTime] = useState<string>("10:30");
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
@@ -104,6 +186,68 @@ export default function ReservasPage() {
       setServicesLoading(false);
     }
     loadServices();
+  }, []);
+
+  useEffect(() => {
+    async function loadBookedAppointments() {
+      if (!selectedDate) return;
+
+      setAvailabilityLoading(true);
+
+      const supabase = createClient();
+
+      const start = new Date(`${selectedDate}T00:00:00`);
+      const end = new Date(`${selectedDate}T23:59:59.999`);
+
+      const { data, error } = await supabase.rpc(
+        "get_booked_appointment_ranges",
+        {
+          p_start: start.toISOString(),
+          p_end: end.toISOString(),
+        }
+      );
+
+      if (error) {
+        console.error("Error consultando citas ocupadas:", error);
+        setBookedAppointments([]);
+      } else {
+        setBookedAppointments(data ?? []);
+      }
+
+      setAvailabilityLoading(false);
+    }
+
+    loadBookedAppointments();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    async function loadBusinessSchedule() {
+      const supabase = createClient();
+
+      const { data: hours, error: hoursError } = await supabase
+        .from("business_hours")
+        .select("*")
+        .order("weekday");
+
+      if (hoursError) {
+        console.error("Error cargando horarios:", hoursError);
+      } else {
+        setBusinessHours(hours ?? []);
+      }
+
+      const { data: exceptions, error: exceptionsError } = await supabase
+        .from("availability_exceptions")
+        .select("*")
+        .order("starts_at");
+
+      if (exceptionsError) {
+        console.error("Error cargando excepciones:", exceptionsError);
+      } else {
+        setAvailabilityExceptions(exceptions ?? []);
+      }
+    }
+
+    loadBusinessSchedule();
   }, []);
 
   const [paymentMethod, setPaymentMethod] = useState<
@@ -358,7 +502,16 @@ export default function ReservasPage() {
                     Horas disponibles para el {selectedDate}
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {AVAILABLE_TIME_SLOTS.map((slot) => {
+                    {AVAILABLE_TIME_SLOTS.filter((slot) =>
+                      isSlotAvailable(
+                        slot,
+                        totalDuration,
+                        selectedDate,
+                        businessHours,
+                        availabilityExceptions,
+                        bookedAppointments
+                      )
+                    ).map((slot) => {
                       const active = selectedTime === slot;
                       return (
                         <button
@@ -399,8 +552,19 @@ export default function ReservasPage() {
                 </button>
                 <button
                   type="button"
+                  disabled={
+                    availabilityLoading ||
+                    !isSlotAvailable(
+                      selectedTime,
+                      totalDuration,
+                      selectedDate,
+                      businessHours,
+                      availabilityExceptions,
+                      bookedAppointments
+                    )
+                  }
                   onClick={() => setStep(3)}
-                  className="px-7 py-3.5 rounded-full bg-[#2D2C28] text-[#FAF9F7] text-xs font-medium hover:bg-[#5B5650]"
+                  className="px-7 py-3.5 rounded-full bg-[#2D2C28] text-[#FAF9F7] text-xs font-medium hover:bg-[#5B5650] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Continuar a Datos y Pago
                 </button>
