@@ -1,57 +1,90 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
-/**
- * Webhook seguro para recibir confirmaciones de la pasarela de pago externa (ej. Stripe / Redsys).
- * Cumple con la Sección 8 del plan:
- * - No se guardan números de tarjeta ni CVV en la base de datos.
- * - Registra la operación en `public.payments` (anticipo 50% o matrícula de curso) y actualiza
- *   el estado de `public.appointments` a `confirmed` o `public.course_enrollments` a `confirmed`.
- */
 export async function POST(request: NextRequest) {
-  try {
-    const payload = await request.json();
+  const signature = request.headers.get("stripe-signature");
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    const {
-      appointment_id = null,
-      enrollment_id = null,
-      amount,
-      currency = "EUR",
-      payment_type = "deposit",
-      provider = "Stripe",
-      provider_reference,
-    } = payload;
-
-    if ((!appointment_id && !enrollment_id) || !provider_reference) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Se requiere appointment_id o enrollment_id junto con provider_reference.",
-        },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      message:
-        "Pago verificado por el servidor. Lista la integración con Supabase Service Role para insertar en public.payments y confirmar la reserva/inscripción.",
-      record_preview: {
-        appointment_id,
-        enrollment_id,
-        amount,
-        currency,
-        payment_type,
-        status: "approved",
-        provider,
-        provider_reference,
-        paid_at: new Date().toISOString(),
-      },
-    });
-  } catch {
+  if (!signature || !webhookSecret) {
     return NextResponse.json(
-      { ok: false, error: "Payload de webhook inválido" },
+      { error: "Falta la firma o el secreto del webhook." },
       { status: 400 }
     );
   }
+
+  const body = await request.text();
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      webhookSecret
+    );
+  } catch (error) {
+    console.error("Firma Stripe inválida:", error);
+
+    return NextResponse.json(
+      { error: "Firma de Stripe no válida." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    event.type !== "checkout.session.completed" &&
+    event.type !== "checkout.session.async_payment_succeeded"
+  ) {
+    return NextResponse.json({ received: true });
+  }
+
+  const session = event.data.object as Stripe.Checkout.Session;
+
+  if (session.payment_status !== "paid") {
+    return NextResponse.json({ received: true });
+  }
+
+  const appointmentId = session.metadata?.appointment_id;
+  const paymentId = session.metadata?.payment_id;
+
+  if (
+    !appointmentId ||
+    !paymentId ||
+    !session.amount_total ||
+    !session.currency
+  ) {
+    console.error("Faltan datos en la sesión:", session.id);
+
+    return NextResponse.json(
+      { error: "La sesión no contiene los datos necesarios." },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "confirm_stripe_appointment_payment",
+    {
+      p_payment_id: paymentId,
+      p_appointment_id: appointmentId,
+      p_session_id: session.id,
+      p_amount_cents: session.amount_total,
+      p_currency: session.currency,
+    }
+  );
+
+  if (error || data !== true) {
+    console.error("Error confirmando el pago:", error);
+
+    return NextResponse.json(
+      { error: "No se pudo confirmar el pago en Supabase." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    received: true,
+    confirmed: true,
+  });
 }

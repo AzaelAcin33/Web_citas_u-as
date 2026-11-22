@@ -112,7 +112,9 @@ export default function ReservasPage() {
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [nailShape, setNailShape] = useState<string>("Almendra de salón");
   const [needsRemoval, setNeedsRemoval] = useState<boolean>(false);
-  const [selectedDate, setSelectedDate] = useState<string>("2026-11-18");
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toLocaleDateString("en-CA")
+  );
   const [selectedTime, setSelectedTime] = useState<string>("10:30");
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
@@ -277,10 +279,56 @@ export default function ReservasPage() {
   const remainingAmount = Number((totalPrice - depositAmount).toFixed(2));
   const totalDuration = selectedService.duration_minutes + extraRemovalMinutes;
 
-  const handleConfirmPayment = (e: React.FormEvent) => {
+  const handleConfirmPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBookingConfirmed(true);
-    setStep(4);
+
+    try {
+      const startsAt = new Date(
+        `${selectedDate}T${selectedTime}:00`
+      ).toISOString();
+
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          serviceId: selectedServiceId,
+          startsAt,
+          fullName,
+          email,
+          phone,
+          notes,
+          nailShape,
+          needsRemoval
+        }),
+      });
+      const responseText = await response.text();
+
+      let result;
+
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          `El servidor no devolvió JSON. Respuesta: ${responseText.slice(0, 200) || "vacía"}`
+        );
+      }
+
+      if (!response.ok || !result.url) {
+        throw new Error(
+          result.error || "No se pudo inicar el pago"
+        );
+      }
+      window.location.href = result.url;
+    } catch (error) {
+      console.error("Error iniciando pago", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Ocurrio un error"
+      );
+    }
   };
 
   return (
@@ -475,7 +523,7 @@ export default function ReservasPage() {
                   <input
                     type="date"
                     value={selectedDate}
-                    min="2026-11-11"
+                    min={new Date().toLocaleDateString("en-CA")}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl bg-[#F7F4EF] border border-[#B6AEA1] text-sm text-[#2D2C28]"
                   />
