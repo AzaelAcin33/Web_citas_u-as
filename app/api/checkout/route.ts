@@ -63,10 +63,13 @@ export async function POST(request: Request) {
         if (!appUrl) {
             throw new Error("Falta NEXT_PUBLIC_APP_URL en .env.local");
         }
+        const expirationTime = Math.floor(Date.now() / 1000) + 34 * 60;
+
         console.log("Fecha del servidor:", new Date().toISOString());
-        console.log("Caducidad Stripe:", new Date(
-            (Math.floor(Date.now() / 1000) + 60 * 60) * 1000
-        ).toISOString());
+        console.log(
+            "Caducidad Stripe:",
+            new Date(expirationTime * 1000).toISOString()
+        );
 
         const session = await stripe.checkout.sessions.create({
             mode: "payment",
@@ -89,8 +92,8 @@ export async function POST(request: Request) {
                 appointment_id: booking.appointment_id,
                 payment_id: booking.payment_id,
             },
-            expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
-            success_url: `${appUrl}/reservas?payment=success`,
+            expires_at: expirationTime,
+            success_url: `${appUrl}/reservas?payment=success&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${appUrl}/reservas?payment=cancelled`,
         });
         return NextResponse.json({

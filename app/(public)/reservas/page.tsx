@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, use } from "react";
+import { useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "@/lib/supabase";
 import {
   NailService,
@@ -97,7 +98,8 @@ function isSlotAvailable(
   );
 }
 
-export default function ReservasPage() {
+function ReservasContent() {
+  const searchParams = useSearchParams();
   const [services, setServices] = useState<NailService[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
@@ -252,10 +254,77 @@ export default function ReservasPage() {
     loadBusinessSchedule();
   }, []);
 
+  useEffect(() => {
+    const payment = searchParams.get("payment");
+    const sessionId = searchParams.get("session_id");
+
+    if (payment === "cancelled") {
+      setPaymentMessage(
+        "Has cancelado el proceso de pago. Tu reserva todavía no está confirmada."
+      );
+      return;
+    }
+
+    if (payment !== "success" || !sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function verifyPayment() {
+      setPaymentLoading(true);
+      setPaymentMessage("Estamos comprobando tu pago...");
+
+      try {
+        const response = await fetch(
+          `/api/checkout/verify?session_id=${encodeURIComponent(sessionId!)}`,
+          { cache: "no-store" }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.error ||
+            result.message ||
+            "No hemos podido confirmar todavía tu pago."
+          );
+        }
+
+        if (!cancelled) {
+          setBookingConfirmed(true);
+          setPaymentMessage("");
+          setStep(4);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPaymentMessage(
+            error instanceof Error
+              ? error.message
+              : "No se pudo verificar el pago."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPaymentLoading(false);
+        }
+      }
+    }
+
+    verifyPayment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
+
+
   const [paymentMethod, setPaymentMethod] = useState<
     "stripe_card" | "bizum" | "apple_pay"
   >("stripe_card");
   const [bookingConfirmed, setBookingConfirmed] = useState<boolean>(false);
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const selectedService = services.find(
     (s) => s.id === selectedServiceId
@@ -371,7 +440,11 @@ export default function ReservasPage() {
           ))}
         </div>
       </div>
-
+      {(paymentLoading || paymentMessage) && (
+        <div className="rounded-xl border border-[#E3DAC9] bg-[#F1EDE4] p-4 text-sm text-[#2D2C28]">
+          {paymentMessage}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-8 space-y-6">
           {/* PASO 1 */}
@@ -917,5 +990,18 @@ export default function ReservasPage() {
         </aside>
       </div>
     </div>
+  );
+}
+export default function ReservasPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          Cargando reservas...
+        </div>
+      }
+    >
+      <ReservasContent />
+    </Suspense>
   );
 }
