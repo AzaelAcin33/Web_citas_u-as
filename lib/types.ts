@@ -121,6 +121,10 @@ export interface NailCourse {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  duration_hours?: number;
+  level?: string;
+  includes_kit?: boolean;
+  syllabus?: string[];
 }
 
 export type CourseSessionStatus = "open" | "full" | "cancelled";
@@ -133,6 +137,7 @@ export interface CourseSession {
   capacity: number | null;
   status: CourseSessionStatus;
   location: string | null;
+  enrolled_count?: number;
 }
 
 export type EnrollmentStatus =
@@ -170,10 +175,10 @@ export interface PaymentRecord {
 export interface MediaItem {
   id: string;
   storage_path: string;
-  alt_text: string;
-  caption: string;
-  media_type: "image" | "video";
-  style_tag: string;
+  alt_text: string | null;
+  caption: string | null;
+  media_type: string;
+  style_tag: string | null;
   created_by: string | null;
   created_at: string;
 }

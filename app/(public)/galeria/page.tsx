@@ -18,7 +18,13 @@ export default function GaleriaPage() {
 
   const styles = [
     "Todos",
-    ...Array.from(new Set(publishedItems.map((i) => i.media.style_tag))),
+    ...Array.from(
+      new Set(
+        publishedItems
+          .map((i) => i.media.style_tag)
+          .filter((tag): tag is string => Boolean(tag))
+      )
+    ),
   ];
 
   const visibleItems = publishedItems.filter(
@@ -57,11 +63,10 @@ export default function GaleriaPage() {
             key={tag}
             type="button"
             onClick={() => setSelectedStyle(tag)}
-            className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
-              selectedStyle === tag
+            className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${selectedStyle === tag
                 ? "bg-[#2D2C28] text-[#FAF9F7]"
                 : "bg-[#F7F4EF] text-[#5B5650] border border-[#EBE5D9] hover:bg-[#E3DAC9]"
-            }`}
+              }`}
           >
             {tag}
           </button>
@@ -79,7 +84,7 @@ export default function GaleriaPage() {
             <div className="relative aspect-[4/4] bg-[#E3DAC9] overflow-hidden">
               <img
                 src={media.storage_path}
-                alt={media.alt_text}
+                alt={media.alt_text ?? ""}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
               <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-[#FAF9F7]/95 text-[#2D2C28] text-[11px] font-medium border border-[#EBE5D9]">
@@ -112,7 +117,7 @@ export default function GaleriaPage() {
             <div className="aspect-[16/11] bg-[#E3DAC9]">
               <img
                 src={activeMedia.storage_path}
-                alt={activeMedia.alt_text}
+                alt={activeMedia.alt_text ?? ""}
                 className="w-full h-full object-cover"
               />
             </div>

@@ -158,7 +158,7 @@ export default function AdminGaleriaPage() {
               <div className="relative aspect-square bg-[#E3DAC9]">
                 <img
                   src={media.storage_path}
-                  alt={media.alt_text}
+                  alt={media.alt_text ?? ""}
                   className="w-full h-full object-cover"
                 />
                 <span

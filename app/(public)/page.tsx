@@ -355,7 +355,7 @@ export default function HomePage() {
                 <div className="rounded-2xl overflow-hidden border border-[#E3DAC9] h-64 bg-[#EBE5D9]">
                   <img
                     src={INITIAL_MEDIA[1].storage_path}
-                    alt={INITIAL_MEDIA[1].alt_text}
+                    alt={INITIAL_MEDIA[1].alt_text ?? ""}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -380,7 +380,7 @@ export default function HomePage() {
                 <div className="rounded-2xl overflow-hidden border border-[#E3DAC9] h-64 bg-[#EBE5D9]">
                   <img
                     src={INITIAL_MEDIA[2].storage_path}
-                    alt={INITIAL_MEDIA[2].alt_text}
+                    alt={INITIAL_MEDIA[2].alt_text ?? ""}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -463,9 +463,10 @@ export default function HomePage() {
                 (s) => s.course_id === course.id && s.status === "open"
               );
               const nextSession = sessions[0];
-              const spotsLeft = nextSession
-                ? nextSession.capacity - nextSession.enrolled_count
-                : 0;
+              const spotsLeft =
+                nextSession?.capacity != null
+                  ? Math.max(0, nextSession.capacity - (nextSession.enrolled_count ?? 0))
+                  : null;
 
               return (
                 <article
@@ -476,7 +477,7 @@ export default function HomePage() {
                     <div className="h-48 overflow-hidden relative bg-[#EBE5D9]">
                       <img
                         src={course.image_path || ""}
-                        alt={course.name}
+                        alt={course.name ?? ""}
                         className="w-full h-full object-cover"
                       />
                       <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-[#FAF9F7]/95 text-[#2D2C28] text-xs font-medium">
@@ -501,9 +502,9 @@ export default function HomePage() {
                       <span className="text-[#5B5650]">
                         {nextSession
                           ? `Próxima fecha: ${new Date(nextSession.starts_at).toLocaleDateString("es-ES", {
-                              day: "2-digit",
-                              month: "short",
-                            })}`
+                            day: "2-digit",
+                            month: "short",
+                          })}`
                           : "Fechas bajo consulta"}
                       </span>
                       <span className="font-semibold text-[#2D2C28]">
