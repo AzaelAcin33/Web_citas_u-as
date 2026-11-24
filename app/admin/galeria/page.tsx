@@ -1,56 +1,169 @@
 "use client";
 
-import { useState } from "react";
-import { INITIAL_GALLERY_ITEMS, INITIAL_MEDIA } from "@/lib/mock-data";
-import { GalleryItem, MediaItem } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase";
+import type { GalleryItem, MediaItem } from "@/lib/types";
 
 export default function AdminGaleriaPage() {
-  const [mediaList, setMediaList] = useState<MediaItem[]>(INITIAL_MEDIA);
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(
-    INITIAL_GALLERY_ITEMS
-  );
+  const supabase = createClient();
 
-  const [newUrl, setNewUrl] = useState("");
+  const [mediaList, setMediaList] = useState<MediaItem[]>([]);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [newAlt, setNewAlt] = useState("");
   const [newCaption, setNewCaption] = useState("");
   const [newTag, setNewTag] = useState("Clean Nails & Nude");
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const handleUploadMedia = (e: React.FormEvent) => {
-    e.preventDefault();
-    const mediaId = `med-${Date.now()}`;
-    const newMedia: MediaItem = {
-      id: mediaId,
-      storage_path:
-        newUrl ||
-        "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=900&q=85",
-      alt_text: newAlt,
-      caption: newCaption,
-      media_type: "image",
-      style_tag: newTag,
-      created_by: "admin-01",
-      created_at: new Date().toISOString(),
-    };
-    setMediaList((prev) => [newMedia, ...prev]);
-    setGalleryItems((prev) => [
-      {
-        id: `gal-${Date.now()}`,
-        media_id: mediaId,
-        sort_order: prev.length + 1,
-        is_published: true,
-      },
-      ...prev,
-    ]);
-    setNewUrl("");
-    setNewAlt("");
-    setNewCaption("");
+  const getImageUrl = (path: string) => {
+    if (path.startsWith("http")) return path;
+
+    const { data } = supabase.storage
+      .from("business-media")
+      .getPublicUrl(path);
+
+    return data.publicUrl;
   };
 
-  const togglePublish = (galId: string) => {
-    setGalleryItems((prev) =>
-      prev.map((g) =>
-        g.id === galId ? { ...g, is_published: !g.is_published } : g
-      )
-    );
+  const loadGallery = async () => {
+    setLoading(true);
+
+    const { data: gallery, error: galleryError } = await supabase
+      .from("gallery_items")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (galleryError) {
+      setMessage("Error al cargar la galería: " + galleryError.message);
+      setLoading(false);
+      return;
+    }
+
+    const { data: media, error: mediaError } = await supabase
+      .from("media")
+      .select("*");
+
+    if (mediaError) {
+      setMessage("Error al cargar las fotografías: " + mediaError.message);
+      setLoading(false);
+      return;
+    }
+
+    setGalleryItems(gallery ?? []);
+    setMediaList(media ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadGallery();
+  }, []);
+
+  const handleUploadMedia = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!selectedFile) {
+      setMessage("Selecciona una fotografía.");
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setMessage("La imagen no puede superar los 10 MB.");
+      return;
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/avif",
+    ];
+
+    if (!allowedTypes.includes(selectedFile.type)) {
+      setMessage("Formato no permitido.");
+      return;
+    }
+
+    setUploading(true);
+    setMessage("");
+
+    const fileExtension = selectedFile.name.split(".").pop();
+    const filePath = `${crypto.randomUUID()}.${fileExtension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("business-media")
+      .upload(filePath, selectedFile);
+
+    if (uploadError) {
+      setMessage("Error al subir la imagen: " + uploadError.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: mediaData, error: mediaError } = await supabase
+      .from("media")
+      .insert({
+        storage_path: filePath,
+        alt_text: newAlt,
+        caption: newCaption,
+        media_type: "image",
+        style_tag: newTag,
+      })
+      .select()
+      .single();
+
+    if (mediaError) {
+      setMessage("Error al guardar la fotografía: " + mediaError.message);
+      setUploading(false);
+      return;
+    }
+
+    const nextOrder =
+      galleryItems.length > 0
+        ? Math.max(...galleryItems.map((item) => item.sort_order)) + 1
+        : 1;
+
+    const { error: galleryError } = await supabase
+      .from("gallery_items")
+      .insert({
+        media_id: mediaData.id,
+        sort_order: nextOrder,
+        is_published: true,
+      });
+
+    if (galleryError) {
+      setMessage("La imagen se subió, pero no se pudo añadir a la galería: " + galleryError.message);
+      setUploading(false);
+      return;
+    }
+
+    setSelectedFile(null);
+    setNewAlt("");
+    setNewCaption("");
+
+    await loadGallery();
+
+    setMessage("¡Fotografía subida y publicada correctamente!");
+    setUploading(false);
+  };
+
+  const togglePublish = async (galId: string) => {
+    const item = galleryItems.find((g) => g.id === galId);
+    if (!item) return;
+
+    const { error } = await supabase
+      .from("gallery_items")
+      .update({ is_published: !item.is_published })
+      .eq("id", galId);
+
+    if (error) {
+      setMessage("Error al actualizar: " + error.message);
+      return;
+    }
+
+    await loadGallery();
   };
 
   return (
@@ -80,15 +193,20 @@ export default function AdminGaleriaPage() {
 
         <div>
           <label className="block font-medium text-[#2D2C28] mb-1">
-            URL o ruta de archivo
+            Seleccionar fotografía *
           </label>
+
           <input
-            type="text"
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            placeholder="https://... o ruta de imagen"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/avif"
+            required
+            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
             className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7F4EF] border border-[#B6AEA1]"
           />
+
+          <p className="text-[10px] text-[#878378] mt-1">
+            JPEG, PNG, WEBP o AVIF. Máximo 10 MB.
+          </p>
         </div>
 
         <div>
@@ -138,12 +256,31 @@ export default function AdminGaleriaPage() {
         <div className="md:col-span-2 flex justify-end">
           <button
             type="submit"
+            disabled={uploading}
             className="px-6 py-3 rounded-xl bg-[#2D2C28] text-[#FAF9F7] font-medium hover:bg-[#5B5650]"
           >
-            Subir y Publicar en la Galería
+            {uploading ? "Subiendo fotografía..." : "Subir y Publicar en la Galería"}
           </button>
         </div>
       </form>
+
+      {message && (
+        <p className="rounded-xl bg-[#F1EDE4] p-4 text-sm text-[#2D2C28]">
+          {message}
+        </p>
+      )}
+
+      {loading && (
+        <p className="text-sm text-[#5B5650]">
+          Cargando fotografías...
+        </p>
+      )}
+
+      {!loading && galleryItems.length === 0 && (
+        <p className="text-sm text-[#5B5650]">
+          Todavía no hay fotografías en la galería.
+        </p>
+      )}
 
       {/* Grid de administración de fotos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -157,16 +294,15 @@ export default function AdminGaleriaPage() {
             >
               <div className="relative aspect-square bg-[#E3DAC9]">
                 <img
-                  src={media.storage_path}
+                  src={getImageUrl(media.storage_path)}
                   alt={media.alt_text ?? ""}
                   className="w-full h-full object-cover"
                 />
                 <span
-                  className={`absolute top-3 right-3 px-3 py-1 rounded-full font-medium ${
-                    gal.is_published
-                      ? "bg-[#2D2C28] text-[#FAF9F7]"
-                      : "bg-[#EBE5D9] text-[#878378]"
-                  }`}
+                  className={`absolute top-3 right-3 px-3 py-1 rounded-full font-medium ${gal.is_published
+                    ? "bg-[#2D2C28] text-[#FAF9F7]"
+                    : "bg-[#EBE5D9] text-[#878378]"
+                    }`}
                 >
                   {gal.is_published ? "Publicada" : "Oculta"}
                 </span>
