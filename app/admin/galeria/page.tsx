@@ -17,6 +17,7 @@ export default function AdminGaleriaPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const getImageUrl = (path: string) => {
     if (path.startsWith("http")) return path;
@@ -164,6 +165,90 @@ export default function AdminGaleriaPage() {
     }
 
     await loadGallery();
+  };
+
+  const deletePhoto = async (galId: string) => {
+    const galleryItem = galleryItems.find((item) => item.id === galId);
+
+    if (!galleryItem) return;
+
+    const media = mediaList.find(
+      (item) => item.id === galleryItem.media_id
+    );
+
+    if (!media) {
+      setMessage("No se ha encontrado la fotografía.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Seguro que quieres eliminar esta fotografía? Esta acción no se puede deshacer."
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(galId);
+    setMessage("");
+
+    // Eliminar primero la entrada de la galería
+    const { error: galleryError } = await supabase
+      .from("gallery_items")
+      .delete()
+      .eq("id", galId);
+
+    if (galleryError) {
+      setMessage("Error al eliminar de la galería: " + galleryError.message);
+      setDeletingId(null);
+      return;
+    }
+
+    // Comprobar si otra entrada utiliza todavía esta imagen
+    const { data: remainingItems, error: checkError } = await supabase
+      .from("gallery_items")
+      .select("id")
+      .eq("media_id", media.id);
+
+    if (checkError) {
+      setMessage(
+        "La fotografía se ha quitado de la galería, pero no se pudo comprobar si sigue utilizándose."
+      );
+      setDeletingId(null);
+      await loadGallery();
+      return;
+    }
+
+    // Solo borrar el archivo y el registro si ya no tiene referencias
+    if (!remainingItems || remainingItems.length === 0) {
+      const { error: mediaError } = await supabase
+        .from("media")
+        .delete()
+        .eq("id", media.id);
+
+      if (mediaError) {
+        setMessage("Se quitó de la galería, pero no se pudo eliminar su registro: " + mediaError.message);
+        setDeletingId(null);
+        await loadGallery();
+        return;
+      }
+
+      if (!media.storage_path.startsWith("http")) {
+        const { error: storageError } = await supabase.storage
+          .from("business-media")
+          .remove([media.storage_path]);
+
+        if (storageError) {
+          setMessage("Se eliminó el registro, pero no se pudo borrar el archivo: " + storageError.message);
+          setDeletingId(null);
+          await loadGallery();
+          return;
+        }
+      }
+    }
+
+    await loadGallery();
+
+    setMessage("Fotografía eliminada correctamente.");
+    setDeletingId(null);
   };
 
   return (
@@ -324,6 +409,14 @@ export default function AdminGaleriaPage() {
                   {gal.is_published
                     ? "Ocultar de la galería pública"
                     : "Publicar en la galería"}
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingId === gal.id}
+                  onClick={() => deletePhoto(gal.id)}
+                  className="w-full py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 font-medium hover:bg-red-100 disabled:opacity-50"
+                >
+                  {deletingId === gal.id ? "Eliminando..." : "Eliminar fotografía"}
                 </button>
               </div>
             </div>
