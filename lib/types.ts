@@ -112,17 +112,13 @@ export type CourseModality = "Presencial" | "Online" | "Híbrido";
 
 export interface NailCourse {
   id: string;
-  category_id: string;
+  category_id: string | null;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
   modality: CourseModality;
-  image_path: string;
+  image_path: string | null;
   is_active: boolean;
-  duration_hours: number;
-  level: string;
-  syllabus: string[];
-  includes_kit: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -134,10 +130,9 @@ export interface CourseSession {
   course_id: string;
   starts_at: string;
   ends_at: string;
-  capacity: number;
-  enrolled_count: number;
+  capacity: number | null;
   status: CourseSessionStatus;
-  location: string;
+  location: string | null;
 }
 
 export type EnrollmentStatus =
