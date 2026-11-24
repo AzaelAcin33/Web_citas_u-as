@@ -1,9 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { logoutUser } from "@/actions/auth/auth";
+import { requireAdmin } from "@/lib/auth/admin";
 
 const ADMIN_LINKS = [
   { href: "/admin", label: "Resumen y Agenda" },
@@ -15,86 +12,59 @@ const ADMIN_LINKS = [
   { href: "/admin/configuracion", label: "Negocio, Horarios y Roles" },
 ];
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const [activeRole, setActiveRole] = useState<"admin" | "superadmin">("admin");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { role } = await requireAdmin();
+
+  const roleLabel =
+    role === "superadmin" ? "Superadministrador" : "Propietaria";
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[#FAF9F7] text-[#2D2C28]">
       {/* Sidebar Desktop */}
       <aside className="hidden lg:flex lg:w-72 lg:flex-col bg-[#F1EDE4] border-r border-[#E3DAC9] shrink-0">
-        <div className="p-6 border-b border-[#E3DAC9] space-y-4">
+        <div className="p-6 border-b border-[#E3DAC9]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#2D2C28] text-[#FAF9F7] flex items-center justify-center font-serif font-semibold">
               L&apos;A
             </div>
+
             <div>
               <span className="font-serif text-lg font-semibold text-[#2D2C28] block leading-none">
                 Panel de Gestión
               </span>
+
               <span className="text-[11px] text-[#878378] uppercase tracking-wider mt-1 block">
                 L&apos;Atelier Nails
               </span>
             </div>
           </div>
 
-          {/* Selector de nivel de acceso */}
-          <div className="p-2.5 rounded-xl bg-[#FAF9F7] border border-[#E3DAC9] text-xs space-y-1.5">
+          {/* Rol real obtenido desde Supabase */}
+          <div className="mt-5 p-3 rounded-xl bg-[#FAF9F7] border border-[#E3DAC9]">
             <span className="text-[10px] uppercase tracking-wider text-[#878378] font-semibold block">
-              Nivel de acceso:
+              Nivel de acceso
             </span>
-            <div className="grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                onClick={() => setActiveRole("admin")}
-                className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors ${
-                  activeRole === "admin"
-                    ? "bg-[#2D2C28] text-[#FAF9F7]"
-                    : "text-[#5B5650] hover:bg-[#E3DAC9]"
-                }`}
-              >
-                Propietaria
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveRole("superadmin")}
-                className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors ${
-                  activeRole === "superadmin"
-                    ? "bg-[#2D2C28] text-[#FAF9F7]"
-                    : "text-[#5B5650] hover:bg-[#E3DAC9]"
-                }`}
-              >
-                Superadmin
-              </button>
-            </div>
+
+            <span className="text-xs font-medium text-[#2D2C28] mt-1 block">
+              {roleLabel}
+            </span>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
-          {ADMIN_LINKS.map((item) => {
-            const isActive =
-              item.href === "/admin"
-                ? pathname === "/admin"
-                : pathname?.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs font-medium transition-all ${
-                  isActive
-                    ? "bg-[#2D2C28] text-[#FAF9F7] shadow-2xs"
-                    : "text-[#5B5650] hover:bg-[#E3DAC9] hover:text-[#2D2C28]"
-                }`}
-              >
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          {ADMIN_LINKS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex items-center justify-between px-4 py-3 rounded-xl text-xs font-medium transition-all text-[#5B5650] hover:bg-[#E3DAC9] hover:text-[#2D2C28]"
+            >
+              <span>{item.label}</span>
+            </Link>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-[#E3DAC9] space-y-2">
@@ -104,6 +74,7 @@ export default function AdminLayout({
           >
             Ver Web Pública
           </Link>
+
           <form action={logoutUser}>
             <button
               type="submit"
@@ -116,52 +87,45 @@ export default function AdminLayout({
       </aside>
 
       {/* Cabecera Móvil / Tablet */}
-      <div className="lg:hidden sticky top-0 z-40 bg-[#F1EDE4] border-b border-[#E3DAC9] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-full bg-[#2D2C28] text-[#FAF9F7] flex items-center justify-center font-serif text-sm font-semibold">
-            L&apos;A
-          </span>
-          <div>
-            <span className="font-serif text-sm font-semibold text-[#2D2C28] block">
-              Administración
+      <div className="lg:hidden sticky top-0 z-40 bg-[#F1EDE4] border-b border-[#E3DAC9] px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-full bg-[#2D2C28] text-[#FAF9F7] flex items-center justify-center font-serif text-sm font-semibold">
+              L&apos;A
             </span>
-            <span className="text-[10px] text-[#878378]">
-              Perfil: {activeRole === "admin" ? "Propietaria" : "Superadmin"}
-            </span>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2">
+            <div>
+              <span className="font-serif text-sm font-semibold text-[#2D2C28] block">
+                Administración
+              </span>
+
+              <span className="text-[10px] text-[#878378]">
+                Perfil: {roleLabel}
+              </span>
+            </div>
+          </div>
+
           <Link
             href="/"
             className="px-3 py-1.5 rounded-lg bg-[#FAF9F7] border border-[#B6AEA1] text-xs font-medium text-[#2D2C28]"
           >
             Web Pública
           </Link>
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="px-3 py-1.5 rounded-lg bg-[#2D2C28] text-[#FAF9F7] text-xs font-medium"
-          >
-            {mobileMenuOpen ? "Cerrar" : "Menú"}
-          </button>
         </div>
-      </div>
 
-      {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#F1EDE4] border-b border-[#E3DAC9] px-4 py-3 space-y-1">
+        {/* Navegación móvil */}
+        <nav className="flex gap-2 overflow-x-auto mt-3 pb-1">
           {ADMIN_LINKS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="block px-3 py-2.5 rounded-xl text-xs font-medium text-[#2D2C28] hover:bg-[#E3DAC9]"
+              className="shrink-0 px-3 py-2 rounded-lg bg-[#FAF9F7] border border-[#E3DAC9] text-[11px] font-medium text-[#5B5650] hover:bg-[#E3DAC9] transition-colors"
             >
               {item.label}
             </Link>
           ))}
-        </div>
-      )}
+        </nav>
+      </div>
 
       {/* Contenido principal */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -170,11 +134,16 @@ export default function AdminLayout({
             <span className="w-2 h-2 rounded-full bg-[#2D2C28]" />
             <span>Panel de gestión interna del estudio</span>
           </div>
+
           <div className="flex items-center gap-4">
             <span className="px-3 py-1 rounded-full bg-[#E3DAC9] text-[#2D2C28] font-medium">
-              Sesión: {activeRole === "admin" ? "Propietaria" : "Superadministrador"}
+              Sesión: {roleLabel}
             </span>
-            <Link href="/reservas" className="text-[#2D2C28] font-medium underline">
+
+            <Link
+              href="/reservas"
+              className="text-[#2D2C28] font-medium underline"
+            >
               Ver Agenda Pública
             </Link>
           </div>
