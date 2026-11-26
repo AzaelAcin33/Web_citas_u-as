@@ -55,8 +55,9 @@ export default async function MisReservasPege() {
 
     const history = reservations.filter(
         (appointment) =>
-            new Date(appointment.starts_at) >= new Date() &&
-            appointment.status !== 'cancelled'
+            new Date(appointment.starts_at) < new Date() ||
+            appointment.status === 'cancelled' ||
+            appointment.status === 'completed'
     )
 
     function formatDate(date: string) {
