@@ -35,28 +35,7 @@ export default function LoginPage() {
 
     const formData = new FormData(e.currentTarget);
 
-    // Si están configuradas las variables de entorno de Supabase, ejecuta el Server Action de Azael
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      try {
-        await loginUser(formData);
-        return;
-      } catch {
-        // Next.js redirect lanza una excepción interna que el router maneja
-      }
-    }
-
-    // Modo interactivo local: redirige a /admin si accede con cuenta de administración
-    const normalizedEmail = email.trim().toLowerCase();
-    if (
-      accountType === "admin" ||
-      normalizedEmail.includes("admin") ||
-      normalizedEmail === "hola@lateliernails.es"
-    ) {
-      router.push("/admin");
-      return;
-    }
-
-    setLoggedAsCustomer(true);
+    await loginUser(formData);
   }
 
   return (
@@ -88,11 +67,10 @@ export default function LoginPage() {
                     setEmail("claudia.morales@email.com");
                     setPassword("Cliente2026!");
                   }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-medium transition-colors ${
-                    accountType === "customer"
+                  className={`py-2.5 px-3 rounded-xl text-xs font-medium transition-colors ${accountType === "customer"
                       ? "bg-[#FAF9F7] text-[#2D2C28] shadow-2xs"
                       : "text-[#5B5650] hover:text-[#2D2C28]"
-                  }`}
+                    }`}
                 >
                   Acceso Clientas
                 </button>
@@ -103,11 +81,10 @@ export default function LoginPage() {
                     setEmail("admin@lateliernails.es");
                     setPassword("AdminAtelier2026!");
                   }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-medium transition-colors ${
-                    accountType === "admin"
+                  className={`py-2.5 px-3 rounded-xl text-xs font-medium transition-colors ${accountType === "admin"
                       ? "bg-[#2D2C28] text-[#FAF9F7] shadow-2xs"
                       : "text-[#5B5650] hover:text-[#2D2C28]"
-                  }`}
+                    }`}
                 >
                   Acceso Administración
                 </button>

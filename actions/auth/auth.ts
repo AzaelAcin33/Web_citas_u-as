@@ -62,8 +62,8 @@ export async function registerUser(formData: FormData) {
         console.error('Error de registro', error.message)
         redirect('/?auth=register-error')
     }
-    console.log('REGISTRO CORRECTO: redirigiendo a inicio')
-    redirect('/?auth=registered')
+    console.log('REGISTRO CORRECTO: esperando confirmación de email')
+    redirect('/confirmar-email')
 }
 
 // Inicio de sesión

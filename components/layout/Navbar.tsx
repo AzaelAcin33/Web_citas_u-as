@@ -27,7 +27,10 @@ export default function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data, error }) => {
+      console.log("USUARIO NAVBAR:", data.user);
+      console.log("ERROR AUTH:", error);
+
       setUser(data.user);
       setLoading(false);
     });

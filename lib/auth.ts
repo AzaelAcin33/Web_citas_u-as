@@ -9,7 +9,7 @@ export async function getCurrentUser() {
         error,
     } = await supabase.auth.getUser()
 
-    if (error || !user) {
+    if (error || !user || !user.email_confirmed_at) {
         return null
     }
 
