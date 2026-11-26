@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendNotification } from "@/lib/emails/notify";
+import { bookingEmail } from "@/lib/emails/templates/booking";
+
+function formatDate(date: string) {
+    return new Intl.DateTimeFormat("es-ES", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        timeZone: "Europe/Madrid",
+    }).format(new Date(date));
+}
+
+function formatTime(date: string) {
+    return new Intl.DateTimeFormat("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Europe/Madrid",
+    }).format(new Date(date));
+}
+
+function formatAmount(amount: number, currency: string) {
+    return new Intl.NumberFormat("es-ES", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+    }).format(amount / 100);
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -128,8 +154,33 @@ export async function GET(request: NextRequest) {
             .eq("id", appointment.customer_id)
             .maybeSingle();
 
-        if (customerError) {
-            console.error("Error recuperando el cliente:", customerError);
+        // Enviar confirmación de reserva
+        if (customer?.email) {
+            const email = bookingEmail("deposit_received", {
+                customerName: customer.full_name,
+                serviceName: appointment.service_name_snapshot,
+                date: formatDate(appointment.starts_at),
+                time: formatTime(appointment.starts_at),
+                deposit: formatAmount(
+                    session.amount_total!,
+                    session.currency!
+                ),
+            });
+
+            try {
+                await sendNotification({
+                    key: `appointment-deposit:${paymentId}`,
+                    to: customer.email,
+                    type: "appointment_deposit_received",
+                    subject: email.subject,
+                    html: email.html,
+                });
+            } catch (emailError) {
+                console.error(
+                    "Error enviando confirmación de reserva:",
+                    emailError
+                );
+            }
         }
 
         return NextResponse.json({

@@ -1,4 +1,4 @@
-import { resend, EMAIL_FROM } from "./resend"
+import { resend, EMAIL_FROM } from "./resend";
 
 interface SendEmailParams {
     to: string;
@@ -6,7 +6,7 @@ interface SendEmailParams {
     html: string;
 }
 
-export async function snedEmail({
+export async function sendEmail({
     to,
     subject,
     html,
